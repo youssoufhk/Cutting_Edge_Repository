@@ -78,7 +78,8 @@ def create_generator(nb_couche,nb_neurone):
     for i in nb_neurone:
         generator.add(Dense(units=i))                                                                                        
         #generator.add(ReLU(0.2))
-    generator.add(Dense(units=X_size, activation='tanh'))                                                                                                                                                                                     generator.compile(loss='binary_crossentropy', optimizer='adam')
+    generator.add(Dense(units=X_size, activation='tanh'))    
+    generator.compile(loss='binary_crossentropy', optimizer='adam')
     return generator
 
 g=create_generator(1, [1])

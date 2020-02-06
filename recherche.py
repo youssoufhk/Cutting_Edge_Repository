@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Created on Wed Feb  5 21:37:46 2020
 
+@author: chenzeyu
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import tensorflow as tf
 import pandas as pd
 from pandas_datareader import data
 import numpy as np
@@ -8,14 +17,13 @@ import numpy as np
 import datetime as dt
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
-from keras.layers import Dense, Dropout, Input
-from keras.models import Model,Sequential
+
+from tensorflow.keras.layers import Dense,Dropout,Input
+from tensorflow.keras.models import Model,Sequential
 from tqdm import tqdm
 #from keras.layers.advanced_activations import ReLU
 
 from sklearn.neighbors import KernelDensity
-
-#import os
 
 #default_path = "D:/Documents/Cours/Cutting Hedge/"
 #os.chdir(default_path)
@@ -49,9 +57,11 @@ for j in range(0,n_stocks):
         data_close.iloc[:,j]=data_close.iloc[:,j].fillna(data_close.iloc[:,j].mean())
 
 
+
 ## Creation du dataframe des rendements
 rendements = np.log(data_close.values[1:,:]/data_close.values[:-1,:])
 #rendements = np.transpose(rendements)
+rendements = np.float32(rendements)
 
 X_train_r, X_test_r = train_test_split(rendements, test_size = 0.33, random_state = 42)
 #X_train_r = np.transpose(X_train_r)
@@ -78,11 +88,10 @@ def create_generator(nb_couche,nb_neurone):
     for i in nb_neurone:
         generator.add(Dense(units=i))                                                                                        
         #generator.add(ReLU(0.2))
-    generator.add(Dense(units=X_size, activation='tanh'))    
-    generator.compile(loss='binary_crossentropy', optimizer='adam')
+    generator.add(Dense(units=X_size,activation="tanh"))   
     return generator
 
-g=create_generator(1, [1])
+#g=create_generator(1, [1])
 
 
 ## discriminator
@@ -102,7 +111,7 @@ def create_discriminator(nb_couche, nb_neurone):
     discriminator.compile(loss='binary_crossentropy', optimizer='adam')
     return discriminator
 
-d =create_discriminator(1, [1])
+#d =create_discriminator(1, [1])
 
 
 def create_gan(discriminator, generator):
@@ -114,7 +123,7 @@ def create_gan(discriminator, generator):
     gan.compile(loss='binary_crossentropy', optimizer='adam')
     return gan
 
-gan = create_gan(d,g)
+#gan = create_gan(d,g)
 
 ## Score du KDE
 def KDE(x,y):
@@ -125,10 +134,9 @@ KDE(X_train_r,X_test_r)
 
 
 ## Train our GAN model
-def training(distrib,epochs, batch_size,nb_neurone,nb_couche):
+def training(distrib,epochs,batch_size,nb_neurone,nb_couche):
     # Creating GAN
     score = 0
-
     generator= create_generator(nb_couche,nb_neurone)
     discriminator= create_discriminator(nb_couche,nb_neurone)
     gan = create_gan(discriminator, generator)
@@ -136,24 +144,34 @@ def training(distrib,epochs, batch_size,nb_neurone,nb_couche):
     for e in range(1,epochs+1):
         print("Epoch %d" %e)
         for _ in tqdm(range(batch_size)):
-
             #generate  random noise as an input  to  initialize the  generator
             if distrib == 'normal':
-                noise= np.random.normal(0,1, [batch_size,noise_size])
+                noisetensor = tf.random_normal(shape=[batch_size,noise_size],dtype=tf.float64)
+                #noise= np.random.normal(0,1, [batch_size,noise_size])
             else:
-                noise = np.random.rand(batch_size,noise_size)
-
+                noisetensor = tf.random_uniform(shape=[batch_size,noise_size],dtype=tf.float64)
+                #noise = np.random.rand(batch_size,noise_size)
+            
+            with tf.Session() as sess:
+                noise = sess.run(noisetensor)
             #noise= np.random.normal(0,1, [batch_size,X_size])
 
             # Generate fake indexes from noised input
             generated_indexes = generator.predict(noise)
 
             # Get a random set of  real indexes
-            image_batch =X_train_r[np.random.randint(low=0,high=X_train_r.shape[0],size=batch_size)]
+            randinttensor = tf.random.uniform([batch_size], 0 ,X_train_r.shape[0],dtype=tf.int64)
+            with tf.Session() as sess:
+                index = sess.run(randinttensor)
+                
+            
+            image_batch =X_train_r[index]
 
             #Construct different batches of  real and fake data
-            X= np.concatenate([image_batch, generated_indexes])
-
+            
+            concattensor = tf.concat([image_batch,generated_indexes],0)
+            with tf.Session() as sess:
+                X = sess.run(concattensor)
             # Labels for generated and real data
             y_dis=np.zeros(2*batch_size)
             y_dis[:batch_size]=0.9
@@ -163,7 +181,10 @@ def training(distrib,epochs, batch_size,nb_neurone,nb_couche):
             discriminator.train_on_batch(X, y_dis)
 
             #Tricking the noised input of the Generator as real data
-            noise= np.random.normal(0,1, [batch_size, noise_size])
+            noisetensor = tf.random_normal(shape=[batch_size,noise_size],dtype=tf.float64)
+            with tf.Session() as sess:
+                noise = sess.run(noisetensor)
+                
             y_gen = np.ones(batch_size)
 
             # During the training of gan,
@@ -174,17 +195,23 @@ def training(distrib,epochs, batch_size,nb_neurone,nb_couche):
             #training  the GAN by alternating the training of the Discriminator
             #and training the chained GAN model with Discriminators weights freezed.
             gan.train_on_batch(noise, y_gen)
+   
     if distrib == 'normal':
-        noise= np.random.normal(0,1, [batch_size,noise_size])
+        noisetensor = tf.random_normal(shape=[1,noise_size],dtype=tf.float64)
     else:
-        noise = np.random.rand(batch_size,noise_size)
+        noisetensor = tf.random_uniform(shape=[batch_size,noise_size],dtype=tf.float64)
+    with tf.Session() as sess:
+        noise = sess.run(noisetensor)
+        
     generated = generator.predict(noise)
     score = KDE(X_train_r,generated)
 
-    return score
+    return generated
 
-training('normal',1, 128,[2],1)
 
+
+score1 = training('normal',25, X_size,[20],1)
+"""
 def find_optimal_model(C=3,N=4,epoch=1):
     nb_couche = np.array(range(1,C+1))
     nb_neurones = [10*x for x in range(1,N+1)]
@@ -201,8 +228,8 @@ def find_optimal_model(C=3,N=4,epoch=1):
     return scores
 
 
-score2 = find_optimal_model(3,3,10)
-print(score2)
-pd.DataFrame(score2).to_csv("score.csv")
+#score2 = find_optimal_model(3,3,10)
+#print(score2)
+#pd.DataFrame(score2).to_csv("score.csv")
 
-                                                                                      
+"""                                                                                

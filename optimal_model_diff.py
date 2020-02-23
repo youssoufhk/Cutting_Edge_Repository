@@ -213,13 +213,6 @@ def training(distrib,epochs, batch_size,nb_neurone,nb_couche,nb_neurone2, nb_cou
     return score
 
 
-with tf.device('/device:GPU:0'):
-    score1 = training('normal',12, X_size,[20],1)
-with tf.device('/device:GPU:1'):
-    score1 = training('normal',12, X_size,[20],1)
-
-
-
 def find_optimal_model(C=3,N=4,epoch=1):
     nb_couche = np.array(range(1,C+1))
     neurones = [10*x for x in range(1,N+1)]
@@ -243,8 +236,9 @@ def find_optimal_model(C=3,N=4,epoch=1):
     return scores
 
 
+with tf.device('/device:GPU:0'):
+    score2 = find_optimal_model(1,2,10)
 
-score2 = find_optimal_model(1,2,10)
 print(score2)
 pd.DataFrame(score2).to_csv("score.csv")
                                            

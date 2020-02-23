@@ -67,7 +67,7 @@ X_train_r, X_test_r = train_test_split(rendements, test_size = 0.33, random_stat
 #X_train_r = np.transpose(X_train_r)
 
 X_size = X_train_r.shape[1]
-noise_size = 128
+noise_size = 1
 
 plt.plot(data_close)
 plt.xlabel('Time')
@@ -81,9 +81,9 @@ plt.ylabel('Closed Value')
 #######################
 
 ## generator
-def create_generator(nb_couche,nb_neurone):
+def create_generator(nb_neurone):
     generator=Sequential()
-    generator.add(Dense(units=256,input_dim=noise_size,activation="relu"))
+    generator.add(Dense(units=nb_neurone[0],input_dim=noise_size,activation="relu"))
     #generator.add(ReLU(0.2))
     for i in nb_neurone:
         generator.add(Dense(units=i))                                                                                        
@@ -91,27 +91,25 @@ def create_generator(nb_couche,nb_neurone):
     generator.add(Dense(units=X_size,activation="tanh"))   
     return generator
 
-#g=create_generator(1, [1])
+#g=create_generator([1])
 
 
 ## discriminator
-def create_discriminator(nb_couche, nb_neurone):
+def create_discriminator(nb_neurone):
     discriminator=Sequential()
-    discriminator.add(Dense(units=1024,input_dim=X_size,activation="relu"))
-    #discriminator.add(ReLU(6.2))
+    discriminator.add(Dense(units=nb_neurone[0],input_dim=X_size,activation="relu"))
     discriminator.add(Dropout(0.3))
+    
     for i in nb_neurone:
         discriminator.add(Dense(units=i,activation="relu"))
-        #discriminator.add(ReLU(0.2))
         discriminator.add(Dropout(0.3))
     discriminator.add(Dense(units=256,activation="relu"))
-    #discriminator.add(ReLU(0.2))
     discriminator.add(Dense(units=1, activation='sigmoid'))
 
     discriminator.compile(loss='binary_crossentropy', optimizer='adam')
     return discriminator
 
-#d =create_discriminator(1, [1])
+#d =create_discriminator([1])
 
 
 def create_gan(discriminator, generator):
@@ -134,11 +132,11 @@ KDE(X_train_r,X_test_r)
 
 
 ## Train our GAN model
-def training(distrib,epochs,batch_size,nb_neurone,nb_couche):
+def training(distrib,epochs,batch_size,nb_neurone):
     # Creating GAN
     score = 0
-    generator= create_generator(nb_couche,nb_neurone)
-    discriminator= create_discriminator(nb_couche,nb_neurone)
+    generator= create_generator(nb_neurone)
+    discriminator= create_discriminator(nb_neurone)
     gan = create_gan(discriminator, generator)
 
     for e in range(1,epochs+1):
@@ -210,20 +208,19 @@ def training(distrib,epochs,batch_size,nb_neurone,nb_couche):
 
 
 
-score1 = training('normal',25, X_size,[20],1)
+score1 = training('normal',25, X_size,[20])
 """
 def find_optimal_model(C=3,N=4,epoch=1):
-    nb_couche = np.array(range(1,C+1))
     nb_neurones = [10*x for x in range(1,N+1)]
 
     scores = []
 
-    for i in nb_couche:
-        for j in np.array(range(0,int(len(nb_neurones)-i+1))):
+    for i in range(1,C+1):
+        for neurons in product(neurones, repeat=i):
             nom = ""
-            for k in nb_neurones[j:int(j+i)] :
-                nom = nom + " C"+str(k)
-            tmp = [nom,training('normal',epoch, 128,nb_neurones[j:int(j+i)],i)]
+            for k in neurons :
+                nom = nom + " C" + str(k)
+            tmp = [nom,training('normal',epoch, X_train_r.shape[0],neurons)]
             scores.append(tmp)
     return scores
 

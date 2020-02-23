@@ -22,6 +22,7 @@ import os
 #default_path = "D:/Documents/Cours/Cutting Hedge/"
 #os.chdir(default_path)
 
+
 ###############################
 ##### Import des donnees ######
 ###############################

@@ -9,6 +9,7 @@ Created on Wed Feb  5 21:37:46 2020
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import tensorflow as tf
 import pandas as pd
 from pandas_datareader import data
 import numpy as np

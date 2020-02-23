@@ -81,37 +81,38 @@ plt.ylabel('Closed Value')
 #######################
 
 ## generator
-def create_generator(nb_couche,nb_neurone):
+def create_generator(nb_neurone):
     generator=Sequential()
-    generator.add(Dense(units=256,input_dim=noise_size,activation="relu"))
+    print(nb_neurone[0])
+    generator.add(Dense(units=nb_neurone[0],input_dim=noise_size,activation="relu"))
     #generator.add(ReLU(0.2))
-    for i in nb_neurone:
-        generator.add(Dense(units=i))                                                                                        
-        #generator.add(ReLU(0.2))
+    
+    for i in nb_neurone[1:]:
+        generator.add(Dense(units=i,activation="relu"))                                                                                        
     generator.add(Dense(units=X_size,activation="tanh"))   
+    generator.summary()
     return generator
 
-#g=create_generator(1, [1])
+#g=create_generator([1])
 
 
 ## discriminator
-def create_discriminator(nb_couche, nb_neurone):
+def create_discriminator(nb_neurone):
     discriminator=Sequential()
-    discriminator.add(Dense(units=1024,input_dim=X_size,activation="relu"))
+    discriminator.add(Dense(units=nb_neurone[0],input_dim=X_size,activation="relu"))
     #discriminator.add(ReLU(6.2))
-    discriminator.add(Dropout(0.3))
-    for i in nb_neurone:
-        discriminator.add(Dense(units=i,activation="relu"))
-        #discriminator.add(ReLU(0.2))
-        discriminator.add(Dropout(0.3))
-    discriminator.add(Dense(units=256,activation="relu"))
-    #discriminator.add(ReLU(0.2))
-    discriminator.add(Dense(units=1, activation='sigmoid'))
+    discriminator.add(Dropout(0.3))    
 
+    for i in nb_neurone[1:]:
+        discriminator.add(Dense(units=i,activation="relu"))
+        discriminator.add(Dropout(0.3))
+    discriminator.add(Dense(units=1, activation='sigmoid'))
+    
+    discriminator.summary()
     discriminator.compile(loss='binary_crossentropy', optimizer='adam')
     return discriminator
 
-#d =create_discriminator(1, [1])
+#d = create_discriminator([1])
 
 
 def create_gan(discriminator, generator):
@@ -124,6 +125,13 @@ def create_gan(discriminator, generator):
     return gan
 
 #gan = create_gan(d,g)
+
+def KDE(x,y):
+    kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(x)
+    score = sum(kde.score_samples(y[:,]))
+    return score
+
+KDE(X_train_r,X_test_r)
 
 
 def creat_tf_graph(batch_size,noise_size):
@@ -141,12 +149,12 @@ def creat_tf_graph(batch_size,noise_size):
 ###################
 ###################
     
-def training(distrib,epochs, batch_size,nb_neurone,nb_couche,nb_neurone2, nb_couche2):
+def training(distrib,epochs, batch_size,nb_neurone,nb_neurone2):
     # Creating GAN
     score = 0
 
-    generator= create_generator(nb_couche,nb_neurone)
-    discriminator= create_discriminator(nb_couche2,nb_neurone2)
+    generator= create_generator([nb_neurone])
+    discriminator= create_discriminator([nb_neurone2])
     gan = create_gan(discriminator, generator)
 
     global graph
@@ -214,14 +222,12 @@ def training(distrib,epochs, batch_size,nb_neurone,nb_couche,nb_neurone2, nb_cou
 
 
 def find_optimal_model(C=3,N=4,epoch=1):
-    nb_couche = np.array(range(1,C+1))
     neurones = [10*x for x in range(1,N+1)]
-
     scores = []
 
-    for i in nb_couche:
+    for i in range(1,C+1):
         for neurons in product(neurones, repeat=i):
-            for j in nb_couche:
+            for j in range(1,C+1):
                 for neurons2 in product(neurones, repeat=j):
                     nom = "Gén. : "
                     for k in neurons:
@@ -231,7 +237,7 @@ def find_optimal_model(C=3,N=4,epoch=1):
                     for l in neurons2:
                         nom = nom + " C" + str(l)
                         
-                    tmp = [nom,training('normal',epoch, X_train_r.shape[0],neurons,i,neurons2,j)]
+                    tmp = [nom,training('normal',epoch, X_train_r.shape[0],neurons,neurons2)]
                     scores.append(tmp)
     return scores
 
@@ -242,3 +248,4 @@ with tf.device('/device:GPU:0'):
 print(score2)
 pd.DataFrame(score2).to_csv("score.csv")
                                            
+                  

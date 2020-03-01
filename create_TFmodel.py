@@ -120,7 +120,7 @@ with tf.device('/device:GPU:0'):
             
         for j in range(1,nb_batch+1):   
             index = ind_X[(j-1)*batch_size:j*batch_size]
-            X_batch = [X_train[i] for i in index]
+            X_batch = X_train[index]
             Z_batch = sample_noise_Gaus(batch_size, noise_size)
             _, dloss = sess.run([disc_step, disc_loss], feed_dict={X: X_batch, Z: Z_batch})
             _, gloss = sess.run([gen_step, gen_loss], feed_dict={Z: Z_batch})

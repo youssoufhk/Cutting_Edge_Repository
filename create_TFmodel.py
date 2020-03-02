@@ -69,7 +69,7 @@ def generator(Z,nb_neurone=100,reuse=False):
 
 
 def discriminator(X,nb_neurone=100,reuse=False):
-    """ generator structure
+    """ discriminator structure
     Args:
         X: The real data or generated data 
         nb_neurone : number of neurone of one layer

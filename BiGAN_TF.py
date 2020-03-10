@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Mar  9 17:20:16 2020
-
-@author: Yousshk
-"""
+    Created on Mon Mar  9 17:20:16 2020
+    
+    @author: Yousshk
+    """
 
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import random
-
+from sklearn.neighbors import KernelDensity
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
@@ -19,7 +19,6 @@ from sklearn.model_selection import train_test_split
 
 #Reset all the graph
 tf.reset_default_graph()
-
 ## Import our raw data
 data_close = pd.read_csv('data.csv')
 
@@ -27,88 +26,97 @@ n_time = data_close.shape[0]
 n_stocks = data_close.shape[1]
 
 
-# Data treatment, fill the NA and calculate the daily reture
+# Data treatment ,fill the NA and calculate the daily reture
 for j in range(0,n_stocks):
-        data_close.iloc[:,j]=data_close.iloc[:,j].fillna(data_close.iloc[:,j].mean())
-rendements = np.log(data_close.values[1:,:]/data_close.values[:-1,:])
-rendements = np.float32(rendements)
+    data_close.iloc[:,j]=data_close.iloc[:,j].fillna(data_close.iloc[:,j].mean())
+
+#Data=(data_close)/np.std(data_close)
+
+
+Data = np.log(data_close.values[1:,:]/data_close.values[:-1,:])
+
+X_data =  Data[:,0:5]*100
+#X_data =  Data[:,np.random.randint(0,237,5)]*100
 
 #Split the raw data to two part train and test
-X_train, X_test = train_test_split(rendements, test_size = 0.33, random_state = 42)
 
+
+X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False)
+#X_train, X_test = train_test_split(X_data, test_size = 0.35,random_state=42)
 #Constants declaration
-X_size = X_train.shape[1] #X_size is the number of stock
-ntime = X_train.shape[0]
-noise_size = X_size
-batch_size = 32               #the number of date we will used for one network training
-nb_batch = int(X_size/ batch_size)
-epochs = 100             #the number of iteration
+Y_size = X_train.shape[0]     #the number of date we will used for one network training
+X_size = X_train.shape[1]     #X_size is the number of stock
+epochs = 8000                #the number of iteration
 
 ##############################################
 ##############################################
 
 ## Generate noise
-def sample_noise_uniform(n=batch_size, c_size=noise_size):
-    return np.random.uniform(-1,1,(n,c_size))
+def sample_noise_uniform(n=Y_size, dim=X_size):
+    return np.random.uniform(-1,1,(n,dim))
 
-def sample_noise_Gaus(n=batch_size, c_size=noise_size):
-    return np.random.normal(-1,1,(n,c_size))
+def sample_noise_Gaus(n=Y_size, dim=X_size):
+    var = np.var(X_train)
+    mean = np.mean(X_train)
+    return np.random.normal(mean,var,(n,dim))
+
+def sample_noise_multiGaus(n=Y_size):
+    return np.random.multivariate_normal(np.mean(X_train,axis=0),np.cov(np.transpose(X_train)),n)
 
 
-def generator(Z,nb_neurone=100,reuse=False):
+def generator(Z,nb_neurone=64,reuse=False):
     """ generator structure
-    Args:
+        Args:
         Z: The noise that is uniform or Gaussain
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
-    """
+        """
     with tf.variable_scope("GAN/Generator",reuse=reuse):
         h1 = tf.layers.dense(Z,nb_neurone,activation=tf.nn.leaky_relu)
-        h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
-        output = tf.layers.dense(h2,X_size)
+        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
+        output = tf.layers.dense(h1,X_size)
     return output
 
 
-def discriminator(X,Z,nb_neurone=100,reuse=False):
+def discriminator(X,Z,nb_neurone=64,reuse=False):
     """ discriminator structure
-    Args:
+        Args:
         Z:
         X: The real data or generated data
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
-    """
+        """
     input = tf.concat((X,Z),1)
     with tf.variable_scope("GAN/Discriminator",reuse=reuse):
         h1 = tf.layers.dense(input,nb_neurone,activation=tf.nn.leaky_relu)
-        h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
-        h3 = tf.layers.dense(h2,2)
-        output = tf.layers.dense(h3,1,activation=tf.nn.sigmoid)
-
+        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
+        #h3 = tf.layers.dense(h2,2)
+        output = tf.layers.dense(h1,1,activation=tf.nn.sigmoid)
     return output
 
 
-def encoder(X,nb_neurone=100,reuse=False):
+def encoder(X,nb_neurone=64,reuse=False):
     """ encoder structure
-    Args:
+        Args:
         X: The real data
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
-    """
+        """
     with tf.variable_scope("GAN/Encoder",reuse=reuse):
         h1 = tf.layers.dense(X,nb_neurone,activation=tf.nn.leaky_relu)
-        h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
-        output = tf.layers.dense(h2,noise_size)
+        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
+        output = tf.layers.dense(h1,X_size)
     return output
 
 
 
 X = tf.placeholder(tf.float32,[None,X_size])
-Z = tf.placeholder(tf.float32,[batch_size,noise_size])
+Z = tf.placeholder(tf.float32,[None,X_size])
 
 
 gen_sample = generator(Z)
 z_sample = encoder(X)
-corr = tf.placeholder(tf.float32,[batch_size-1])
+
 real_output = discriminator(X, z_sample)
 fake_output = discriminator(gen_sample, Z,reuse=True)
 
@@ -128,7 +136,7 @@ disc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Discrimin
 
 enc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Encoder")
 
-gen_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+enc_vars)
+gen_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+ enc_vars)
 disc_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
 
 
@@ -139,40 +147,87 @@ disc_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(disc_loss,var_l
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
+nd_steps=1#entrainer plus de dis que gen
+ng_steps=1
+d_loss_list=[]
+g_loss_list = []
 
-#Training process
+X_batch = X_train
 with tf.device('/device:GPU:0'):
     for i in range(epochs):
-        ind_X = random.sample(range(ntime),ntime)
-        for j in range(1,nb_batch+1):
-            index = ind_X[(j-1)*batch_size:j*batch_size]
-            X_batch = X_train[index]
-            Z_batch = sample_noise_Gaus(batch_size, noise_size)
+        #Z_batch = sample_noise_uniform(Y_size,X_size)
+        Z_batch = sample_noise_Gaus(Y_size,X_size)
+        #ind_X = random.sample(range(Y_size),Y_size)
+        for _ in range(nd_steps):
             _, dloss = sess.run([disc_step, disc_loss], feed_dict={X: X_batch, Z: Z_batch})
-            _, gloss = sess.run([gen_step, gen_loss], feed_dict={X: X_batch, Z: Z_batch})
+        
+        for _ in range(ng_steps):
+            _, gloss = sess.run([gen_step, gen_loss],  feed_dict={X: X_batch, Z: Z_batch})
+        
         if i%100==0:
             print ("Iterations:" ,i,"Discriminator loss: ",dloss,"Generator loss:" , gloss)
+            d_loss_list.append(dloss)
+            g_loss_list.append(gloss)
+
 
 
 
 #Generate data with our generator by feeding the z generated by the encoder
 
-test = generator(z_sample,reuse=True)
-pred=sess.run(test,feed_dict={X: X_batch})
-
-#Check if generator cheated discriminator by checking if Prob_real and
-#Prob_pred are closed to 0.5
-
-y_real=sess.run(real_output,feed_dict={X: X_batch})
-
-Prob_real=sess.run(tf.sigmoid(y_real))
-
-y_pred=sess.run(real_output,feed_dict={X: pred})
-
-Prob_pred=sess.run(tf.sigmoid(y_pred))
 
 
-#Check the cov matrix (problem need to solve)
-Cov_pred = np.corrcoef(np.transpose(pred))
-#
-Cov_X = np.corrcoef(np.transpose(X_batch))
+def KDE(X,Y):
+    """ Evaluation function
+        Args:
+        X: The real data
+        Y : The generated data
+        Return:
+        score: the score of generated data, the higer score is, the better data is
+        """
+    h = np.std(X_batch)*(4/3/len(X_batch))**(1/5) #0.5
+    kde = KernelDensity(kernel='gaussian', bandwidth=h).fit(X)
+    score = -sum(kde.score_samples(Y))
+    return score
+
+#Generate data with our generator by feeding Z
+
+#Z_batch = sess.run(z_sample,feed_dict={X: X_batch})
+
+#test = generator(z_sample,reuse=True)
+
+Z_batch = sess.run(z_sample,feed_dict={X: X_batch})
+
+
+pred=sess.run(gen_sample,feed_dict={Z: Z_batch})
+
+print("The score of predition is :", KDE(X_batch,pred),"The best score is :", KDE(X_batch,X_batch))
+"""
+    #Check if generator cheated discriminator by checking if Prob_real and
+    #Prob_pred are closed to 0.5
+    y_real=sess.run(real_logits,feed_dict={X: X_batch})
+    
+    Prob_real=sess.run(tf.sigmoid(y_real))
+    
+    y_pred=sess.run(real_logits,feed_dict={X: pred})
+    
+    Prob_pred=sess.run(tf.sigmoid(y_pred))
+    
+    
+    #Check if the Cov and mean are good
+    np.set_printoptions(suppress=True)
+    
+    Mean_pred = np.mean(np.transpose(pred),axis=1)
+    Mean_X = np.mean(np.transpose(X_batch),axis=1)
+    Cov_pred = np.around(np.cov(np.transpose(pred)), decimals=3)
+    #print(np.around(np.cov(np.transpose(pred)), decimals=2))
+    Cov_X = np.around(np.cov(np.transpose(X_batch)), decimals=3)
+    #print(np.around(np.cov(np.transpose(X_batch)), decimals=2))
+    
+    Corr_pred = np.around(np.corrcoef(np.transpose(pred)), decimals=3)
+    Corr_X = np.around(np.corrcoef(np.transpose(X_batch)), decimals=3)
+    
+    #plot the loss
+    plt.figure(num=0, figsize=(7, 5))
+    
+    plot_loss(d_loss_list,g_loss_list)
+    """

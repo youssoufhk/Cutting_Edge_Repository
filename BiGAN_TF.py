@@ -10,7 +10,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import random
+
 from sklearn.neighbors import KernelDensity
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
@@ -35,7 +35,7 @@ for j in range(0,n_stocks):
 
 Data = np.log(data_close.values[1:,:]/data_close.values[:-1,:])
 
-X_data =  Data[:,0:5]*100
+X_data =  Data[:,0:5]*60 # 1/np.std(Data)
 #X_data =  Data[:,np.random.randint(0,237,5)]*100
 
 #Split the raw data to two part train and test
@@ -46,7 +46,7 @@ X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False)
 #Constants declaration
 Y_size = X_train.shape[0]     #the number of date we will used for one network training
 X_size = X_train.shape[1]     #X_size is the number of stock
-epochs = 8000                #the number of iteration
+epochs = 4000                #the number of iteration
 
 ##############################################
 ##############################################
@@ -136,8 +136,8 @@ disc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Discrimin
 
 enc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Encoder")
 
-gen_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+ enc_vars)
-disc_step = tf.train.AdamOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
+gen_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+ enc_vars)
+disc_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
 
 
 #gen_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+enc_vars)
@@ -201,31 +201,76 @@ Z_batch = sess.run(z_sample,feed_dict={X: X_batch})
 pred=sess.run(gen_sample,feed_dict={Z: Z_batch})
 
 print("The score of predition is :", KDE(X_batch,pred),"The best score is :", KDE(X_batch,X_batch))
+
+#Check if generator cheated discriminator by checking if Prob_real and
+#Prob_pred are closed to 0.5
 """
-    #Check if generator cheated discriminator by checking if Prob_real and
-    #Prob_pred are closed to 0.5
-    y_real=sess.run(real_logits,feed_dict={X: X_batch})
+    y_real=sess.run(real_output,feed_dict={X: X_batch,Z:Z_batch})
     
-    Prob_real=sess.run(tf.sigmoid(y_real))
+    Prob_real=sess.run(y_real)
     
-    y_pred=sess.run(real_logits,feed_dict={X: pred})
+    y_pred=sess.run(real_output,feed_dict={X: X_batch,Z:Z_batch})
     
-    Prob_pred=sess.run(tf.sigmoid(y_pred))
-    
-    
-    #Check if the Cov and mean are good
-    np.set_printoptions(suppress=True)
-    
-    Mean_pred = np.mean(np.transpose(pred),axis=1)
-    Mean_X = np.mean(np.transpose(X_batch),axis=1)
-    Cov_pred = np.around(np.cov(np.transpose(pred)), decimals=3)
-    #print(np.around(np.cov(np.transpose(pred)), decimals=2))
-    Cov_X = np.around(np.cov(np.transpose(X_batch)), decimals=3)
-    #print(np.around(np.cov(np.transpose(X_batch)), decimals=2))
-    
-    Corr_pred = np.around(np.corrcoef(np.transpose(pred)), decimals=3)
-    Corr_X = np.around(np.corrcoef(np.transpose(X_batch)), decimals=3)
-    
+    Prob_pred=sess.run(y_real)
+    """
+
+#Check if the Cov and mean are good
+np.set_printoptions(suppress=True)
+
+Mean_pred = np.mean(np.transpose(pred),axis=1)
+Mean_X = np.mean(np.transpose(X_batch),axis=1)
+Cov_pred = np.around(np.cov(np.transpose(pred)), decimals=3)
+#print(np.around(np.cov(np.transpose(pred)), decimals=2))
+Cov_X = np.around(np.cov(np.transpose(X_batch)), decimals=3)
+#print(np.around(np.cov(np.transpose(X_batch)), decimals=2))
+
+Corr_pred = np.around(np.corrcoef(np.transpose(pred)), decimals=3)
+Corr_X = np.around(np.corrcoef(np.transpose(X_batch)), decimals=3)
+
+plt.figure(num=1, figsize=(7, 5))
+
+D0 = pd.DataFrame(np.transpose((X_batch[:,0],pred[:,0])))
+D0.columns = ['real','fake']
+D0.plot.density()
+#plt.ylim((-0.05, 0.4))
+#plt.xlim((-25, 25))
+plt.title('return series of stock 1')
+
+plt.figure(num=2, figsize=(7, 5))
+D1 = pd.DataFrame(np.transpose((X_batch[:,1],pred[:,1])))
+D1.columns = ['real','fake']
+D1.plot.density()
+#plt.ylim((-0.05, 0.4))
+#plt.xlim((-25, 25))
+plt.title('return series of stock 2')
+plt.show()
+
+plt.figure(num=3, figsize=(7, 5))
+D2 = pd.DataFrame(np.transpose((X_batch[:,2],pred[:,2])))
+D2.columns = ['real','fake']
+D2.plot.density()
+#plt.ylim((-0.05, 0.4))
+#plt.xlim((-25, 25))
+plt.title('return series of stock 3')
+plt.show()
+
+D3 = pd.DataFrame(np.transpose((X_batch[:,3],pred[:,3])))
+D3.columns = ['real','fake']
+D3.plot.density()
+#plt.ylim((-0.05, 0.4))
+#plt.xlim((-25, 25))
+plt.title('return series of stock 4')
+plt.show()
+
+D4 = pd.DataFrame(np.transpose((X_batch[:,4],pred[:,4])))
+D4.columns = ['real','fake']
+D4.plot.density()
+#plt.ylim((-0.05, 0.4))
+#plt.xlim((-25, 25))
+plt.title('return series of stock 5')
+plt.show()
+
+"""
     #plot the loss
     plt.figure(num=0, figsize=(7, 5))
     

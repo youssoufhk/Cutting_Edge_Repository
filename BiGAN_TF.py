@@ -72,11 +72,12 @@ def generator(Z,nb_neurone=100,reuse=False):
 def discriminator(X,Z,nb_neurone=100,reuse=False):
     """ discriminator structure
     Args:
+        Z:
         X: The real data or generated data
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
     """
-    input = tf.concat( (X,Z),1)
+    input = tf.concat((X,Z),1)
     with tf.variable_scope("GAN/Discriminator",reuse=reuse):
         h1 = tf.layers.dense(input,nb_neurone,activation=tf.nn.leaky_relu)
         h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)

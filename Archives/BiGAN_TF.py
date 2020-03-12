@@ -46,6 +46,7 @@ X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False)
 #Constants declaration
 Y_size = X_train.shape[0]     #the number of date we will used for one network training
 X_size = X_train.shape[1]     #X_size is the number of stock
+noise_size = 1
 epochs = 4000                #the number of iteration
 
 ##############################################
@@ -71,7 +72,7 @@ def generator(Z,nb_neurone=64,reuse=False):
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
         """
-    with tf.variable_scope("GAN/Generator",reuse=reuse):
+    with tf.variable_scope("BiGAN/Generator",reuse=reuse):
         h1 = tf.layers.dense(Z,nb_neurone,activation=tf.nn.leaky_relu)
         #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1,X_size)
@@ -87,7 +88,7 @@ def discriminator(X,Z,nb_neurone=64,reuse=False):
         reuse: False means create a new variable,True means reuse the existing one
         """
     input = tf.concat((X,Z),1)
-    with tf.variable_scope("GAN/Discriminator",reuse=reuse):
+    with tf.variable_scope("BiGAN/Discriminator",reuse=reuse):
         h1 = tf.layers.dense(input,nb_neurone,activation=tf.nn.leaky_relu)
         #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
         #h3 = tf.layers.dense(h2,2)
@@ -102,7 +103,7 @@ def encoder(X,nb_neurone=64,reuse=False):
         nb_neurone : number of neurone of one layer
         reuse: False means create a new variable,True means reuse the existing one
         """
-    with tf.variable_scope("GAN/Encoder",reuse=reuse):
+    with tf.variable_scope("BiGAN/Encoder",reuse=reuse):
         h1 = tf.layers.dense(X,nb_neurone,activation=tf.nn.leaky_relu)
         #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1,X_size)
@@ -111,7 +112,7 @@ def encoder(X,nb_neurone=64,reuse=False):
 
 
 X = tf.placeholder(tf.float32,[None,X_size])
-Z = tf.placeholder(tf.float32,[None,X_size])
+Z = tf.placeholder(tf.float32,[None,noise_size])
 
 
 gen_sample = generator(Z)
@@ -130,11 +131,11 @@ gen_loss = -tf.reduce_mean(tf.log(fake_output+1e-5) + tf.log(1.0-real_output+1e-
 
 #Define the Optimizer with learning rate  0.001
 
-gen_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Generator")
+gen_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="BiGAN/Generator")
 
-disc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Discriminator")
+disc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="BiGAN/Discriminator")
 
-enc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="GAN/Encoder")
+enc_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope="BiGAN/Encoder")
 
 gen_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+ enc_vars)
 disc_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
@@ -156,7 +157,7 @@ X_batch = X_train
 with tf.device('/device:GPU:0'):
     for i in range(epochs):
         #Z_batch = sample_noise_uniform(Y_size,X_size)
-        Z_batch = sample_noise_Gaus(Y_size,X_size)
+        Z_batch = sample_noise_Gaus(Y_size,noise_size)
         #ind_X = random.sample(range(Y_size),Y_size)
         for _ in range(nd_steps):
             _, dloss = sess.run([disc_step, disc_loss], feed_dict={X: X_batch, Z: Z_batch})

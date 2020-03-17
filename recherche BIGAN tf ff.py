@@ -173,9 +173,9 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False):
                         _, dloss = sess.run([disc_step, disc_loss], feed_dict={X: X_batch, noise: Z_batch})
                     for _ in range(ng):
                         _, gloss = sess.run([gen_step, gen_loss], feed_dict={noise: Z_batch})
-        
+                    grad = tf.gradients(dloss,disc_vars)
                 if ((i+1)%100==0) & verbose:
-                    print ("Iteration:",i+1, "Discriminator loss: ", dloss, "Generator loss:", gloss)
+                    print ("Iteration:",i+1, "Discriminator loss: ", dloss, "Generator loss:", gloss, "Gradient:",grad)
 
         
         # Affiche la moyenne et la vol estimée, et la valeur moyenne du dis sur les données

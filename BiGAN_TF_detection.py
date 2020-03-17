@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.stats import chi2
+from scipy.stats import chi2, norm
 from sklearn.neighbors import KernelDensity
 from sklearn.model_selection import train_test_split
 import tensorflow.compat.v1 as tf
@@ -317,7 +317,7 @@ def detection(valeurs, seuil=0.99, verbose=False):
 
 detection(valeurs=[X_test[0,:]],seuil=0.99,verbose=True)
 
-def test_detection(valeur, indice=0, seul=0.99, verbose=False):
+def test_detection(valeur, indice=0, seuil=0.99, show_res = False, verbose=False):
     valeur_ini=[X_test[indice,:]]
     valeur_mod = deepcopy(valeur_ini)
     valeur_mod[0][0] = valeur
@@ -325,20 +325,40 @@ def test_detection(valeur, indice=0, seul=0.99, verbose=False):
     _,nb_ini = detection(valeur_ini, seuil, verbose)
     _,nb_mod = detection(valeur_mod, seuil, verbose)
     detecte = 0
-    if nb_ini==1:
-        print("La valeur initiale a été détectée comme une anomalie.")
-        if nb_mod==1:
-            print("La valeur modifiée a aussi été détectée comme une anomalie.")
-        if nb_mod==0:
-            print("La valeur modifiée n'est plus détectée comme une anomalie.")
     if nb_ini==0 and nb_mod == 1:
-        detecte = 1
-        print("La valeur modifiée a été détectée comme une anomalie.")
-    else:
-        print("La valeur modifiée n'a pas été détectée comme une anomalie.")
+            detecte = 1
     
+    if show_res:    
+        if nb_ini==1:
+            print("La valeur initiale a été détectée comme une anomalie.")
+            if nb_mod==1:
+                print("La valeur modifiée a aussi été détectée comme une anomalie.")
+            if nb_mod==0:
+                print("La valeur modifiée n'est plus détectée comme une anomalie.")
+        if nb_ini==0 and nb_mod == 1:
+            print("La valeur modifiée a été détectée comme une anomalie.")
+        if nb_ini==0 and nb_mod == 0:
+            print("La valeur modifiée n'a pas été détectée comme une anomalie.")
+        
     return detecte
 
-for i in 
-test_detection(0.50)
+
+_ = test_detection(2,show_res=True)
+
+def recherche_seuil(colonne, seuil=0.99, nb_pas=50, val_max=5):
+    val_test = np.linspace(0,val_max,nb_pas)
+    detecte = 0
+    nb=0
+
+    while (detecte !=1 and nb<nb_pas):
+        val = val_test[nb]
+        detecte = test_detection(val, indice=colonne,seuil=seuil)
+        nb+=1
+    if detecte==1:
+        print("détection d'anomalie pour la valeur ",nb,": %.2f,"%val,"quantile %.2f%%"%(100*norm.cdf(val)))
+    else:
+        print("Aucune valeur seuil détectée <",val_max,"pour la colonne",colonne)
+    return val
     
+for col in range(n_stocks):
+    recherche_seuil(col, seuil=0.99, nb_pas=50, val_max=5)

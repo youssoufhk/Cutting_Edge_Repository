@@ -317,10 +317,10 @@ def detection(valeurs, seuil=0.99, verbose=False):
 
 detection(valeurs=[X_test[0,:]],seuil=0.99,verbose=True)
 
-def test_detection(valeur, ligne=0,indice=0, seuil=0.99, show_res = False, verbose=False):
+def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verbose=False):
     valeur_ini=[X_test[ligne,:]]
     valeur_mod = deepcopy(valeur_ini)
-    valeur_mod[0][indice] = valeur
+    valeur_mod[0][colonne] = valeur
     seuil = 0.99
     _,nb_ini = detection(valeur_ini, seuil, verbose)
     _,nb_mod = detection(valeur_mod, seuil, verbose)
@@ -345,14 +345,14 @@ def test_detection(valeur, ligne=0,indice=0, seuil=0.99, show_res = False, verbo
 
 _ = test_detection(2,show_res=True)
 
-def recherche_seuil(colonne, seuil=0.99, nb_pas=50, val_max=5):
+def recherche_seuil(colonne=0, ligne=0, seuil=0.99, nb_pas=50, val_max=5):
     val_test = np.linspace(0,val_max,nb_pas)
     detecte = 0
     nb=0
 
     while (detecte !=1 and nb<nb_pas):
         val = val_test[nb]
-        detecte = test_detection(val, indice=colonne,seuil=seuil)
+        detecte = test_detection(val, ligne=ligne, colonne=colonne,seuil=seuil)
         nb+=1
     if detecte==1:
         print("détection d'anomalie pour la valeur ",nb,": %.2f,"%val,"quantile %.2f%%"%(100*norm.cdf(val)))

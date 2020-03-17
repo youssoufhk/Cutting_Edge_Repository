@@ -10,8 +10,8 @@ tf.disable_v2_behavior()
 from sklearn.neighbors import KernelDensity
 from sklearn.model_selection import train_test_split
 import os
- 
-random.seed(2020)
+
+tf.set_random_seed(2020)
 
 default_path = "D:/Documents/Cours/Cutting Edge/"
 os.chdir(default_path)
@@ -68,7 +68,7 @@ def generator(noise ,nb_neurone=[10],couches=1,reuse=False):
     with tf.variable_scope("GAN/Generator",reuse=reuse):
         h1 = tf.layers.dense(noise, units=nb_neurone[0], activation=tf.nn.leaky_relu)
         for i in range(couches-1):
-            h1 = tf.layers.dense(h1, units=nb_neurone[i+1])
+            h1 = tf.layers.dense(h1, units=nb_neurone[i+1], activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1, X_size)
     return output
         
@@ -83,8 +83,8 @@ def discriminator(X,nb_neurone=[10],couches=1,reuse=False):
     with tf.variable_scope("GAN/Discriminator",reuse=reuse):
         h1 = tf.layers.dense(X, units=nb_neurone[0], activation=tf.nn.leaky_relu)
         for i in range(couches-1):
-            h1 = tf.layers.dense(h1, units=nb_neurone[i+1])
-        output = tf.layers.dense(h1, units=1, activation=tf.nn.sigmoid)
+            h1 = tf.layers.dense(h1, units=nb_neurone[i+1], activation=tf.nn.leaky_relu)
+        output = tf.layers.dense(h1, units=1)
     return output
 
 def encoder(X,nb_neurone=[10],couches=1,reuse=False):
@@ -97,7 +97,7 @@ def encoder(X,nb_neurone=[10],couches=1,reuse=False):
     with tf.variable_scope("BiGAN/Encoder",reuse=reuse):
         h1 = tf.layers.dense(X, units=nb_neurone[0], activation=tf.nn.leaky_relu)
         for i in range(couches-1):
-            h1 = tf.layers.dense(h1, units=nb_neurone[i+1])
+            h1 = tf.layers.dense(h1, units=nb_neurone[i+1], activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1,noise_size)
     return output
 
@@ -183,7 +183,7 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False):
         bruits = sample_noise_uniform(batch_size, noise_size)
         pred=sess.run(Generateur,feed_dict={noise: bruits})
         # Score du modèle entrainé
-        score = KDE(pred,X_test)
+        score = KDE(X_test,pred)
         print("Score pour C:",couches," N:",nb_neur,", score:",score)
         
         # Affichage complémentaire
@@ -193,8 +193,9 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False):
             X_batch = X_train[index].reshape(batch_size,X_size)
             # Vérification du discriminateur
             prob_observe = sess.run(Discriminateur_vrai,feed_dict={X: X_batch})
+            prob_observe = tf.nn.sigmoid(prob_observe)
             prob_genere = sess.run(Discriminateur_vrai,feed_dict={X: pred})
-            
+            prob_genere = tf.nn.sigmoid(prob_genere)    
             print("moyenne Discriminateur sur données observées :",np.mean(prob_observe))
             print("moyenne Discriminateur sur données générées :",np.mean(prob_genere))
             
@@ -216,10 +217,16 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False):
             plt.show()
             
             pd.DataFrame(np.transpose((X_batch[:,0],pred[:,0])),columns = ['real','fake']).plot.density()
-        nom = "C"+str(couches)+"N"+str(nb_neur)
+        nom = "C"+str(couches)+"N"+str(nb_neur)+";"
         tmp = [nom,score]
         scores.append(tmp)
     return scores
 
-scores = score([[20,20],[30,30,30]],epoques=1000,ng=2,nd=1,lr=0.001,verbose=False)
+modeles = [[10],[10,10],[10,10,10],[10,10,10,10],[10,10,10,10,10],
+[20],[20,20],[20,20,20],[20,20,20,20],[20,20,20,20,20],
+[30],[30,30],[30,30,30],[30,30,30,30],[30,30,30,30,30],
+[40],[40,40],[40,40,40],[40,40,40,40],[40,40,40,40,40],
+[50],[50,50],[50,50,50],[50,50,50,50],[50,50,50,50,50]]
 
+scores = score(modeles,epoques=100,ng=1,nd=1,lr=0.001,verbose=False)
+pd.DataFrame(scores).to_csv('scores.csv',index = False)

@@ -35,7 +35,7 @@ for j in range(0,n_stocks):
 
 Data = np.log(data_close.values[1:,:]/data_close.values[:-1,:])
 
-X_data =  Data[:,0:5]*60 # 1/np.std(Data)
+X_data =  Data[:,30:31]*60 # 1/np.std(Data)
 #X_data =  Data[:,np.random.randint(0,237,5)]*100
 
 #Split the raw data to two part train and test
@@ -46,7 +46,8 @@ X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False)
 #Constants declaration
 Y_size = X_train.shape[0]     #the number of date we will used for one network training
 X_size = X_train.shape[1]     #X_size is the number of stock
-epochs = 4000                #the number of iteration
+epochs = 2000
+#the number of iteration
 
 ##############################################
 ##############################################
@@ -64,7 +65,7 @@ def sample_noise_multiGaus(n=Y_size):
     return np.random.multivariate_normal(np.mean(X_train,axis=0),np.cov(np.transpose(X_train)),n)
 
 
-def generator(Z,nb_neurone=64,reuse=False):
+def generator(Z,nb_neurone=[64,32],reuse=False):
     """ generator structure
         Args:
         Z: The noise that is uniform or Gaussain
@@ -72,13 +73,13 @@ def generator(Z,nb_neurone=64,reuse=False):
         reuse: False means create a new variable,True means reuse the existing one
         """
     with tf.variable_scope("GAN/Generator",reuse=reuse):
-        h1 = tf.layers.dense(Z,nb_neurone,activation=tf.nn.leaky_relu)
-        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
-        output = tf.layers.dense(h1,X_size)
+        h1 = tf.layers.dense(Z,nb_neurone[0],activation=tf.nn.leaky_relu)
+        h2 = tf.layers.dense(h1,nb_neurone[1],activation=tf.nn.leaky_relu)
+        output = tf.layers.dense(h2,X_size)
     return output
 
 
-def discriminator(X,Z,nb_neurone=64,reuse=False):
+def discriminator(X,Z,nb_neurone=[64,32],reuse=False):
     """ discriminator structure
         Args:
         Z:
@@ -88,14 +89,14 @@ def discriminator(X,Z,nb_neurone=64,reuse=False):
         """
     input = tf.concat((X,Z),1)
     with tf.variable_scope("GAN/Discriminator",reuse=reuse):
-        h1 = tf.layers.dense(input,nb_neurone,activation=tf.nn.leaky_relu)
-        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
-        #h3 = tf.layers.dense(h2,2)
-        output = tf.layers.dense(h1,1,activation=tf.nn.sigmoid)
+        h1 = tf.layers.dense(input,nb_neurone[0],activation=tf.nn.leaky_relu)
+        h2 = tf.layers.dense(h1,nb_neurone[1],activation=tf.nn.leaky_relu)
+        h3 = tf.layers.dense(h2,2)
+        output = tf.layers.dense(h3,1,activation=tf.nn.sigmoid)
     return output
 
 
-def encoder(X,nb_neurone=64,reuse=False):
+def encoder(X,nb_neurone=[64,32],reuse=False):
     """ encoder structure
         Args:
         X: The real data
@@ -103,8 +104,8 @@ def encoder(X,nb_neurone=64,reuse=False):
         reuse: False means create a new variable,True means reuse the existing one
         """
     with tf.variable_scope("GAN/Encoder",reuse=reuse):
-        h1 = tf.layers.dense(X,nb_neurone,activation=tf.nn.leaky_relu)
-        #h2 = tf.layers.dense(h1,nb_neurone,activation=tf.nn.leaky_relu)
+        h1 = tf.layers.dense(X,nb_neurone[0],activation=tf.nn.leaky_relu)
+        #h2 = tf.layers.dense(h1,32,activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1,X_size)
     return output
 
@@ -140,9 +141,6 @@ gen_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(gen_loss,var_
 disc_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
 
 
-#gen_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(gen_loss,var_list = gen_vars+enc_vars)
-#disc_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(disc_loss,var_list = disc_vars)
-
 
 
 sess = tf.Session()
@@ -155,7 +153,6 @@ g_loss_list = []
 X_batch = X_train
 with tf.device('/device:GPU:0'):
     for i in range(epochs):
-        #Z_batch = sample_noise_uniform(Y_size,X_size)
         Z_batch = sample_noise_Gaus(Y_size,X_size)
         #ind_X = random.sample(range(Y_size),Y_size)
         for _ in range(nd_steps):
@@ -176,6 +173,22 @@ with tf.device('/device:GPU:0'):
 
 
 
+## Plot les loss
+def plot_loss(d_loss_list,g_loss_list):
+    plt.subplot(2, 1, 1)
+    plt.plot(d_loss_list, 'yo-')
+    plt.ylabel('d_loss')
+    
+    plt.subplot(2, 1, 2)
+    plt.plot(g_loss_list,'r.-')
+    plt.ylabel('g_loss')
+
+#plot the loss
+plt.figure(num=0, figsize=(7, 5))
+
+plot_loss(d_loss_list,g_loss_list)
+
+
 def KDE(X,Y):
     """ Evaluation function
         Args:
@@ -186,7 +199,7 @@ def KDE(X,Y):
         """
     h = np.std(X_batch)*(4/3/len(X_batch))**(1/5) #0.5
     kde = KernelDensity(kernel='gaussian', bandwidth=h).fit(X)
-    score = -sum(kde.score_samples(Y))
+    score = sum(kde.score_samples(Y))
     return score
 
 #Generate data with our generator by feeding Z
@@ -236,43 +249,38 @@ D0.plot.density()
 #plt.xlim((-25, 25))
 plt.title('return series of stock 1')
 
-plt.figure(num=2, figsize=(7, 5))
-D1 = pd.DataFrame(np.transpose((X_batch[:,1],pred[:,1])))
-D1.columns = ['real','fake']
-D1.plot.density()
-#plt.ylim((-0.05, 0.4))
-#plt.xlim((-25, 25))
-plt.title('return series of stock 2')
-plt.show()
-
-plt.figure(num=3, figsize=(7, 5))
-D2 = pd.DataFrame(np.transpose((X_batch[:,2],pred[:,2])))
-D2.columns = ['real','fake']
-D2.plot.density()
-#plt.ylim((-0.05, 0.4))
-#plt.xlim((-25, 25))
-plt.title('return series of stock 3')
-plt.show()
-
-D3 = pd.DataFrame(np.transpose((X_batch[:,3],pred[:,3])))
-D3.columns = ['real','fake']
-D3.plot.density()
-#plt.ylim((-0.05, 0.4))
-#plt.xlim((-25, 25))
-plt.title('return series of stock 4')
-plt.show()
-
-D4 = pd.DataFrame(np.transpose((X_batch[:,4],pred[:,4])))
-D4.columns = ['real','fake']
-D4.plot.density()
-#plt.ylim((-0.05, 0.4))
-#plt.xlim((-25, 25))
-plt.title('return series of stock 5')
-plt.show()
-
 """
-    #plot the loss
-    plt.figure(num=0, figsize=(7, 5))
+    plt.figure(num=2, figsize=(7, 5))
+    D1 = pd.DataFrame(np.transpose((X_batch[:,1],pred[:,1])))
+    D1.columns = ['real','fake']
+    D1.plot.density()
+    #plt.ylim((-0.05, 0.4))
+    #plt.xlim((-25, 25))
+    plt.title('return series of stock 2')
+    plt.show()
     
-    plot_loss(d_loss_list,g_loss_list)
+    plt.figure(num=3, figsize=(7, 5))
+    D2 = pd.DataFrame(np.transpose((X_batch[:,2],pred[:,2])))
+    D2.columns = ['real','fake']
+    D2.plot.density()
+    #plt.ylim((-0.05, 0.4))
+    #plt.xlim((-25, 25))
+    plt.title('return series of stock 3')
+    plt.show()
+    
+    D3 = pd.DataFrame(np.transpose((X_batch[:,3],pred[:,3])))
+    D3.columns = ['real','fake']
+    D3.plot.density()
+    #plt.ylim((-0.05, 0.4))
+    #plt.xlim((-25, 25))
+    plt.title('return series of stock 4')
+    plt.show()
+    
+    D4 = pd.DataFrame(np.transpose((X_batch[:,4],pred[:,4])))
+    D4.columns = ['real','fake']
+    D4.plot.density()
+    #plt.ylim((-0.05, 0.4))
+    #plt.xlim((-25, 25))
+    plt.title('return series of stock 5')
+    plt.show()
     """

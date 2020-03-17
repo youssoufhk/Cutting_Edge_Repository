@@ -317,10 +317,10 @@ def detection(valeurs, seuil=0.99, verbose=False):
 
 detection(valeurs=[X_test[0,:]],seuil=0.99,verbose=True)
 
-def test_detection(valeur, indice=0, seuil=0.99, show_res = False, verbose=False):
-    valeur_ini=[X_test[indice,:]]
+def test_detection(valeur, ligne=0,indice=0, seuil=0.99, show_res = False, verbose=False):
+    valeur_ini=[X_test[ligne,:]]
     valeur_mod = deepcopy(valeur_ini)
-    valeur_mod[0][0] = valeur
+    valeur_mod[0][indice] = valeur
     seuil = 0.99
     _,nb_ini = detection(valeur_ini, seuil, verbose)
     _,nb_mod = detection(valeur_mod, seuil, verbose)

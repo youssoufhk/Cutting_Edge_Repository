@@ -15,7 +15,7 @@ from sklearn import preprocessing
 from copy import deepcopy
  
 tf.set_random_seed(2020)
-
+np.random.seed(7)
 default_path = "D:/Documents/Cours/Cutting Edge/"
 os.chdir(default_path)
 
@@ -67,7 +67,9 @@ def sample_noise_Gaus(n=Y_size, dim=X_size):
     return np.random.normal(0,1,(n,dim))
 
 def sample_noise_multiGaus(n=Y_size):
-    return np.random.multivariate_normal(np.mean(X_train,axis=0),np.cov(np.transpose(X_train)),n)
+    var = np.cov(np.transpose(X_train))
+    mean = np.mean(X_train,axis=0)
+    return np.random.multivariate_normal(mean,var,n)
 
 
 def generator(Z,nb_neurone=[64,32],reuse=False):
@@ -297,26 +299,33 @@ plt.title('return series of stock 1')
 #data = np.random.normal(size=n)
 #data = np.resize(data,(int(n/nb_stock),nb_stock))
 
+# Renvoie le quantile du khi2 équivalent d'observations multidimensionnelles
+def khi2_test(valeur,dim=X_size):
+    khi2 = np.sum(np.multiply(valeur,valeur),axis=1)
+    quantile = chi2.cdf(khi2,df=dim)
+    return quantile
 
+# Renvoie le nombre de valeurs détectées comme anomalies et leur quantile
 def detection(valeurs, seuil=0.99, verbose=False):
-    dim = len(valeurs[0])
+    #dim = len(valeurs[0])
     n =  len(valeurs)
     label = sess.run(z_sample,feed_dict={X: valeurs})
-    
-    khi2 = np.sum(np.multiply(label,label),axis=1)
-    quantile = chi2.cdf(khi2,df=dim)
+    #khi2 = np.sum(np.multiply(label,label),axis=1)
+    #quantile = chi2.cdf(khi2,df=dim)
+    quantile = khi2_test(label)
     condition = [bool(i) for i in np.sum(([quantile > seuil],[quantile < 1-seuil]),axis=0)[0] ]
     indices = np.array(range(n))[condition]
     
     nb_anomalies = len(quantile[indices])
     if verbose:
-        print("Nombre de quantiles > ",seuil,":",nb_anomalies)
+        print("Nombre de quantiles > ",seuil,":",nb_anomalies,"(%.2f%%)"%(100*nb_anomalies/n))
 
     anomalies =[np.array(valeurs)[indices],np.array(quantile)[indices]]
-    return anomalies,nb_anomalies
+    return anomalies, nb_anomalies
 
-detection(valeurs=[X_test[0,:]],seuil=0.99,verbose=True)
+_,_=detection(valeurs=X_test,seuil=0.99,verbose=True)
 
+# Test de détection d'anomalie sur une observation modifiée de X_test
 def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verbose=False):
     valeur_ini=[X_test[ligne,:]]
     valeur_mod = deepcopy(valeur_ini)
@@ -345,6 +354,7 @@ def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verb
 
 _ = test_detection(2,show_res=True)
 
+# Test du seuil de détection d'anomalie par colonne sur les observations de X_test
 def recherche_seuil(colonne=0, ligne=0, seuil=0.99, nb_pas=50, val_max=5):
     val_test = np.linspace(0,val_max,nb_pas)
     detecte = 0
@@ -361,4 +371,65 @@ def recherche_seuil(colonne=0, ligne=0, seuil=0.99, nb_pas=50, val_max=5):
     return val
     
 for col in range(n_stocks):
-    recherche_seuil(col, seuil=0.99, nb_pas=50, val_max=5)
+    recherche_seuil(col, seuil=0.99, nb_pas=50, val_max=10)
+    
+# Générateur d'anomalie ligne à ligne
+def anomalies(n=1, multiplicateur=5, seuil=0.99):
+    var = multiplicateur*np.cov(np.transpose(X_train))
+    svar = np.linalg.cholesky(var)
+    mean = np.mean(X_train,axis=0)
+    anomalies = []
+    for i in range(n):
+        non_extreme = True
+        while non_extreme:
+            anomalie = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),1)
+            
+            quantile = khi2_test(anomalie)
+            if quantile > seuil:
+                non_extreme = False
+        anomalie = np.dot(svar,anomalie[0])+mean
+        anomalies.append(anomalie)
+    return anomalies
+
+
+test_ano = anomalies(100,5)
+_,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
+
+# Générateur d'anomalies par paquets
+def anomalies_mult(n=1, multiplicateur=5, seuil=0.99):
+    var = multiplicateur*np.cov(np.transpose(X_train))
+    svar = np.linalg.cholesky(var)
+    mean = np.mean(X_train,axis=0)
+    
+    anomalies = []
+    while len(anomalies)<n:
+        valeurs = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),5*n)
+        quantile = khi2_test(valeurs)
+        condition = tuple([quantile > seuil])
+        indices = np.array(range(5*n))[condition]
+        new_anomalies = np.array(valeurs)[indices]
+        anomalies.extend(new_anomalies)
+    
+    anomalies = np.array(anomalies[:n])
+    anomalies = np.dot(anomalies,svar.T)+mean
+    return anomalies
+
+# Détection des anomalies multivariées générées
+def test_anomalies_mult(n=1, multiplicateur=5, seuil=0.99,verbose=True):
+    anomalies = anomalies_mult(n,multiplicateur,seuil)
+    _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=False)
+    if verbose:
+        print("Nombre de quantiles > ",seuil,"multiplicateur : %.2f"%multiplicateur,":",nb,"(%.2f%%)"%(100*nb/n))
+    return anomalies
+    
+for mult in np.linspace(.1,2.,50):
+    _ = test_anomalies_mult(10000,mult)
+
+# Test inversion matrice Cov
+var = np.cov(np.transpose(X_train))
+test = np.random.multivariate_normal(np.zeros(X_size),var,10000)
+svar = np.linalg.inv(np.linalg.cholesky(var))
+np.cov(np.transpose(test))
+
+test2 = np.dot(test,svar.T)
+np.cov(np.transpose(test2))

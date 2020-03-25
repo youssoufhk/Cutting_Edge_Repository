@@ -148,7 +148,7 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False):
     for nb_neur in neurones:
         couches = len(nb_neur)
         tf.reset_default_graph()
-        
+        tf.set_random_seed(1234)
         X = tf.placeholder(tf.float32,[None,X_size])
         Z = tf.placeholder(tf.float32,[None,X_size])
         

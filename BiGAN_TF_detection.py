@@ -396,11 +396,11 @@ test_ano = anomalies(100,5)
 _,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
 
 # Générateur d'anomalies par paquets
-def anomalies_mult(n=1, multiplicateur=5, seuil=0.99):
-    var = multiplicateur*np.cov(np.transpose(X_train))
-    svar = np.linalg.cholesky(var)
-    mean = np.mean(X_train,axis=0)
-    
+def anomalies_mult(n=1, mult_var=5, mult_moy=1,seuil=0.99):
+    var = mult_var*np.cov(np.transpose(X_train))
+    mean = mult_moy*np.mean(X_train,axis=0)
+    svar = np.linalg.cholesky(var)   
+        
     anomalies = []
     while len(anomalies)<n:
         valeurs = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),5*n)
@@ -415,16 +415,23 @@ def anomalies_mult(n=1, multiplicateur=5, seuil=0.99):
     return anomalies
 
 # Détection des anomalies multivariées générées
-def test_anomalies_mult(n=1, multiplicateur=5, seuil=0.99,verbose=True):
-    anomalies = anomalies_mult(n,multiplicateur,seuil)
+def test_anomalies_mult(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
+    anomalies = anomalies_mult(n,mult_var,mult_moy,seuil)
     _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=False)
     if verbose:
-        print("Nombre de quantiles > ",seuil,"multiplicateur : %.2f"%multiplicateur,":",nb,"(%.2f%%)"%(100*nb/n))
+        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(100*nb/n))
     return anomalies
     
-for mult in np.linspace(.1,2.,50):
-    _ = test_anomalies_mult(10000,mult)
-
+for mult in np.linspace(.1,2.5,20):
+    _ = test_anomalies_mult(n=10000,mult_var=mult,seuil=0.99)
+    
+for mult in np.linspace(1,45,30):
+    _ = test_anomalies_mult(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
+    
+anomalies = anomalies_mult(1000,20,.99,False)
+print(np.mean(anomalies,axis=0))
+_,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
+    
 # Test inversion matrice Cov
 var = np.cov(np.transpose(X_train))
 test = np.random.multivariate_normal(np.zeros(X_size),var,10000)
@@ -433,3 +440,17 @@ np.cov(np.transpose(test))
 
 test2 = np.dot(test,svar.T)
 np.cov(np.transpose(test2))
+
+# Student 
+NU_COPULA = 5
+N_SIM = 100
+var = np.cov(np.transpose(X_train))
+from scipy.stats import multivariate_normal, chi2, t
+
+gauss_rv = multivariate_normal(cov=var).rvs(N_SIM).transpose()
+chi2_rv = chi2(NU_COPULA).rvs(N_SIM)
+
+mult_factor = np.sqrt(NU_COPULA / chi2_rv)
+
+student_rvs = np.multiply(mult_factor, gauss_rv)
+inv_student_rvs = t.cdf(student_rvs, NU_COPULA).T

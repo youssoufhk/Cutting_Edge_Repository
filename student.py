@@ -22,8 +22,8 @@ os.chdir(default_path)
 tf.reset_default_graph()
 
 ## Import our raw data
-n_stocks = 20# nombre de stocks conservés
-i = 10 # stock de départ
+n_stocks = 50# nombre de stocks conservés
+i = 0 # stock de départ
 data_close = pd.read_csv('/Users/alixmathieu/Downloads/Cutting Edge/data.csv')
 data_close = data_close.iloc[:,i:(i+n_stocks)]
 
@@ -240,16 +240,16 @@ def KDE(X,Y):
 Z_batch = sess.run(z_sample,feed_dict={X: X_data_g})
 pred = sess.run(gen_sample,feed_dict={Z: Z_batch}) 
 
-Z_test = sample_noise_Gaus(np.shape(X_test)[0],X_size)
-pred_test=sess.run(gen_sample,feed_dict={Z: Z_test}) 
-score = KDE(pred_test,X_test)
+#Z_test = sample_noise_Gaus(np.shape(X_test)[0],X_size)
+#pred_test=sess.run(gen_sample,feed_dict={Z: Z_test}) 
+#score = KDE(pred_test,X_test)
 
 
 #Check if generator cheated discriminator by checking if Prob_real and
 #Prob_pred are closed to 0.5
-Prob_real=sess.run(real_output,feed_dict={X: X_batch,Z:Z_batch})
-Prob_pred=sess.run(real_output,feed_dict={X: pred,Z:Z_batch})
-Pred_test = sess.run(real_output,feed_dict={X:X_test,Z:Z_batch})
+#Prob_real=sess.run(real_output,feed_dict={X: X_batch,Z:Z_batch})
+#Prob_pred=sess.run(real_output,feed_dict={X: pred,Z:Z_batch})
+#Pred_test = sess.run(real_output,feed_dict={X:X_test,Z:Z_batch})
 
 
 ## Plot les data historique
@@ -268,13 +268,12 @@ plot_historique(X_data,pred)
 print("The score of predition is :", score,"The Best score  is :",  KDE(pred_test,pred_test))
 
 
-cov_originale = np.cov(X_data)
-cov_pred = np.cov(pred)
+cov_originale = np.cov(np.transpose(X_data))
+cov_pred = np.cov(np.transpose(pred))
 
 mean_originale = np.mean(X_data,axis = 0)
 mean_pred = np.mean(pred, axis = 0)
-cov_origin = cov_originale[:10,:10]
-cov_p = cov_pred[:10,:10]
+
 
 ####################################
 ###### DETECTION D'ANOMALIE ########
@@ -409,4 +408,3 @@ def test_anomalies_mult(data_train, n=1, multiplicateur=5, seuil=0.99,verbose=Tr
 print("Avec rendements historiques")
 for mult in np.linspace(.1,2.,50):
     _ = test_anomalies_mult(X_train_g,10000,mult)
-

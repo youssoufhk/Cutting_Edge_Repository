@@ -383,13 +383,14 @@ def anomalies_mult(data_train, n=1, multiplicateur=5, seuil=0.99):
     var = multiplicateur*np.cov(np.transpose(data_train))
     svar = np.linalg.cholesky(var)
     mean = np.mean(data_train,axis=0)
-    
+    nb_stock = data_train.shape[1]
     anomalies = []
+    
     while len(anomalies)<n:
-        valeurs = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),5*n)
+        valeurs = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),int(nb_stock*n))
         quantile = khi2_test(valeurs)
         condition = tuple([quantile > seuil])
-        indices = np.array(range(5*n))[condition]
+        indices = np.array(range(int(nb_stock*n)))[condition]
         new_anomalies = np.array(valeurs)[indices]
         anomalies.extend(new_anomalies)
     
@@ -408,3 +409,4 @@ def test_anomalies_mult(data_train, n=1, multiplicateur=5, seuil=0.99,verbose=Tr
 print("Avec rendements historiques")
 for mult in np.linspace(.1,2.,50):
     _ = test_anomalies_mult(X_train_g,10000,mult)
+

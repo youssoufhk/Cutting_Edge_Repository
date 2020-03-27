@@ -435,31 +435,89 @@ def anomalies_mult(n=1, mult_var=5, mult_moy=1,seuil=0.99):
     anomalies = np.dot(anomalies,svar.T)+mean
     return anomalies
 
+    
+anomalies = anomalies_mult(1000,20,1,seuil=.99)
+print(np.mean(anomalies,axis=0))
+_,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
+  
 
 test_ano = anomalies_mult(1000,1)
 _,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
 _,_=detection_simple(valeurs=test_ano,seuil=0.99,verbose=True)
 
-
-
+# Affichage de la détection d'anomalies
+def plot_anomalies(x,y,title='',vol=True):
+    plt.plot(x[0],x[1], 'ro-')
+    plt.plot(y[0],y[1], 'yo-')
+    plt.ylabel('% anomalies détectées')
+    plt.ylabel('% anomalies détectées')
+    plt.title(title)
+    if vol:
+        plt.xlabel('Multiplicateur de la vol')
+    if not vol:
+        plt.xlabel('Multiplicateur de la moyenne')
+    plt.grid()
+    plt.show()
+    
+    
 # Détection des anomalies multivariées générées
 def test_anomalies_mult(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
     anomalies = anomalies_mult(n,mult_var,mult_moy,seuil)
     _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=False)
+    pct = 100*nb/n
     if verbose:
-        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(100*nb/n))
-    return anomalies
-    
+        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
+    return anomalies,pct
+
+# Multiplication sur la var
+pct_anomalies_v = []
 for mult in np.linspace(.1,2.5,20):
-    _ = test_anomalies_mult(n=10000,mult_var=mult,seuil=0.99)
+    _,pct = test_anomalies_mult(n=10000,mult_var=mult,seuil=0.99)
+    pct_anomalies_v.append([mult,pct])
+pct_anomalies_v=pd.DataFrame(pct_anomalies_v)
+
     
-for mult in np.linspace(1,45,30):
-    _ = test_anomalies_mult(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
     
-anomalies = anomalies_mult(1000,20,1,seuil=.99)
-print(np.mean(anomalies,axis=0))
-_,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
-    
+# Multiplication sur la moyenne    
+pct_anomalies_m = []   
+for mult in np.linspace(1,45,20):
+    _,pct = test_anomalies_mult(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
+    pct_anomalies_m.append([mult,pct])    
+pct_anomalies_m=pd.DataFrame(pct_anomalies_m)
+
+
+plt.plot(pct_anomalies_v[0],pct_anomalies_v[1], 'ro-')
+plt.ylabel('% anomalies détectées')
+plt.xlabel('Multiplicateur de la moyenne')
+plt.grid()
+plt.show()
+
+# Détection simple (benchmark) des anomalies multivariées générées
+def test_anomalies_mult_simp(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
+    anomalies = anomalies_mult(n,mult_var,mult_moy,seuil)
+    _,nb=detection_simple(valeurs=anomalies,seuil=0.99,verbose=False)
+    pct = 100*nb/n
+    if verbose:
+        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
+    return anomalies, pct
+
+# Multiplication sur la var
+pct_anomalies_v_s = []
+for mult in np.linspace(.1,2.5,20):
+    _,pct = test_anomalies_mult_simp(n=10000,mult_var=mult,seuil=0.99)
+    pct_anomalies_v_s.append([mult,pct])
+pct_anomalies_v_s=pd.DataFrame(pct_anomalies_v_s)
+# Multiplication sur la moyenne    
+pct_anomalies_m_s = []   
+for mult in np.linspace(1,45,20):
+    _,pct = test_anomalies_mult_simp(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
+    pct_anomalies_m_s.append([mult,pct])    
+pct_anomalies_m_s=pd.DataFrame(pct_anomalies_m_s)
+
+plot_anomalies(pct_anomalies_v,pct_anomalies_v_s,"Anomalies Gaussiennes")
+plot_anomalies(pct_anomalies_m,pct_anomalies_m_s,vol=False)
+
+# Génère des données de Student multivariée
 def mult_student(nb=1,mult_var=1,mult_moy=1,verbose=False):
     var = mult_var*np.cov(np.transpose(X_train))
     mean = mult_moy*np.mean(X_train,axis=0)
@@ -510,12 +568,59 @@ def anomalies_stud(n=1, mult_var=5, mult_moy=1,seuil=0.99):
 
     return anomalies
 
-
 anomalies = anomalies_stud(1000,.05,1,seuil=.99)
-print(np.mean(anomalies,axis=0))
 _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
 
 
+
+# Détection des anomalies de Student multivariées générées
+def test_anomalies_stud(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
+    anomalies = anomalies_stud(n,mult_var,mult_moy,seuil)
+    _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=False)
+    pct=100*nb/n
+    if verbose:
+        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
+    return anomalies,pct
+    
+# Multiplication sur la var
+pct_anomalies_stud_v = []
+for mult in np.linspace(.01,1,20):
+    _,pct =  test_anomalies_stud(n=10000,mult_var=mult,seuil=0.99)
+    pct_anomalies_stud_v.append([mult,pct])
+pct_anomalies_stud_v=pd.DataFrame(pct_anomalies_stud_v)
+# Multiplication sur la moyenne    
+pct_anomalies_stud_m = []
+for mult in np.linspace(1,16,20):
+    _,pct =  test_anomalies_stud(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
+    pct_anomalies_stud_m.append([mult,pct])
+pct_anomalies_stud_m=pd.DataFrame(pct_anomalies_stud_m)
+    
+    
+# Détection simple (benchmark) des anomalies de Student multivariées générées
+def test_anomalies_stud_simp(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
+    anomalies = anomalies_stud(n,mult_var,mult_moy,seuil)
+    _,nb=detection_simple(valeurs=anomalies,seuil=0.99,verbose=False)
+    pct=100*nb/n
+    if verbose:
+        print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
+    return anomalies,pct
+    
+# Multiplication sur la var
+pct_anomalies_stud_v_s = []
+for mult in np.linspace(.01,1,20):
+    _,pct =  test_anomalies_stud_simp(n=10000,mult_var=mult,seuil=0.99)
+    pct_anomalies_stud_v_s.append([mult,pct])
+pct_anomalies_stud_v_s=pd.DataFrame(pct_anomalies_stud_v_s)
+# Multiplication sur la moyenne    
+pct_anomalies_stud_m_s = []
+for mult in np.linspace(1,16,20):
+    _,pct =  test_anomalies_stud_simp(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
+    pct_anomalies_stud_m_s.append([mult,pct])
+pct_anomalies_stud_m_s=pd.DataFrame(pct_anomalies_stud_m_s)
+
+#Affichage des résultats sur les anomalies Student
+plot_anomalies(pct_anomalies_stud_v,pct_anomalies_stud_v_s,"Anomalies Student")
+plot_anomalies(pct_anomalies_stud_m,pct_anomalies_stud_m_s,vol=False)
 
 # Test inversion matrice Cov
 var = np.cov(np.transpose(X_train))

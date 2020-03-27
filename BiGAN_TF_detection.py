@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.stats import chi2, norm
+from scipy.stats import chi2, norm, multivariate_normal, t
 from sklearn.neighbors import KernelDensity
 from sklearn.model_selection import train_test_split
 import tensorflow.compat.v1 as tf
@@ -13,6 +13,7 @@ tf.disable_v2_behavior()
 import os
 from sklearn import preprocessing
 from copy import deepcopy
+ 
  
 tf.set_random_seed(2020)
 np.random.seed(7)
@@ -306,6 +307,26 @@ def khi2_test(valeur,dim=X_size):
     return quantile
 
 # Renvoie le nombre de valeurs détectées comme anomalies et leur quantile
+def detection_simple(valeurs, seuil=0.99, verbose=False):
+    #dim = len(valeurs[0])
+    n =  len(valeurs)
+    var = np.cov(np.transpose(X_train))
+    svar = np.linalg.inv(np.linalg.cholesky(var))
+    mean = np.mean(X_train,axis=0)
+    valeurs = np.dot(valeurs-mean,svar)
+    
+    quantile = khi2_test(valeurs)
+    indices = [i for i in range(n) if quantile[i]>seuil or quantile[i] < 1-seuil]
+    nb_anomalies = len(quantile[indices])
+    if verbose:
+        print("Nombre de quantiles > ",seuil,":",nb_anomalies,"(%.2f%%)"%(100*nb_anomalies/n))
+
+    anomalies =[np.array(valeurs)[indices],np.array(quantile)[indices]]
+    return anomalies, nb_anomalies
+
+_,_ = detection_simple(X_test,verbose=True)
+
+# Renvoie le nombre de valeurs détectées comme anomalies et leur quantile
 def detection(valeurs, seuil=0.99, verbose=False):
     #dim = len(valeurs[0])
     n =  len(valeurs)
@@ -315,7 +336,7 @@ def detection(valeurs, seuil=0.99, verbose=False):
     quantile = khi2_test(label)
     condition = [bool(i) for i in np.sum(([quantile > seuil],[quantile < 1-seuil]),axis=0)[0] ]
     indices = np.array(range(n))[condition]
-    
+    indices = [i for i in range(n) if quantile[i]>seuil or quantile[i] < 1-seuil]
     nb_anomalies = len(quantile[indices])
     if verbose:
         print("Nombre de quantiles > ",seuil,":",nb_anomalies,"(%.2f%%)"%(100*nb_anomalies/n))
@@ -323,7 +344,7 @@ def detection(valeurs, seuil=0.99, verbose=False):
     anomalies =[np.array(valeurs)[indices],np.array(quantile)[indices]]
     return anomalies, nb_anomalies
 
-_,_=detection(valeurs=X_test,seuil=0.99,verbose=True)
+_,_ = detection(valeurs=X_test,seuil=0.99,verbose=True)
 
 # Test de détection d'anomalie sur une observation modifiée de X_test
 def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verbose=False):
@@ -414,6 +435,13 @@ def anomalies_mult(n=1, mult_var=5, mult_moy=1,seuil=0.99):
     anomalies = np.dot(anomalies,svar.T)+mean
     return anomalies
 
+
+test_ano = anomalies_mult(1000,1)
+_,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
+_,_=detection_simple(valeurs=test_ano,seuil=0.99,verbose=True)
+
+
+
 # Détection des anomalies multivariées générées
 def test_anomalies_mult(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
     anomalies = anomalies_mult(n,mult_var,mult_moy,seuil)
@@ -428,10 +456,67 @@ for mult in np.linspace(.1,2.5,20):
 for mult in np.linspace(1,45,30):
     _ = test_anomalies_mult(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
     
-anomalies = anomalies_mult(1000,20,.99,False)
+anomalies = anomalies_mult(1000,20,1,seuil=.99)
 print(np.mean(anomalies,axis=0))
 _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
     
+def mult_student(nb=1,mult_var=1,mult_moy=1,verbose=False):
+    var = mult_var*np.cov(np.transpose(X_train))
+    mean = mult_moy*np.mean(X_train,axis=0)
+    NU_COPULA = X_size    
+    
+    gauss_rv = multivariate_normal(mean=mean,cov=var).rvs(nb).transpose()
+    chi2_rv = chi2(NU_COPULA).rvs(nb)
+    mult_factor = np.sqrt(NU_COPULA / chi2_rv)
+    student_rvs = np.multiply(mult_factor, gauss_rv).T
+    if verbose:
+        for i in range(X_size):
+            plt.hist(student_rvs[:,i],density=True)
+            plt.show()
+    return student_rvs
+
+# quantile historique multi dimension
+def quant_hist(x,alpha,verbose=False):
+    khi2 = np.sum(np.multiply(x,x),axis=1)
+    khi2.sort()
+    quantile = khi2[int(alpha*len(khi2))]
+    if verbose:
+        print("quantile pour alpha=%f"%alpha,":",quantile)
+    return quantile
+
+# Seuil alpha pour une student multivariée
+def seuil_student(alpha=0.99,mult_var=1,mult_moy=1,rep=100,nb=100000):
+    seuil=0
+    for i in range(rep):
+        valeurs = mult_student(nb,mult_var,mult_moy,verbose=False)
+        seuil += quant_hist(valeurs,.99,False)
+    seuil=seuil/rep
+
+    return seuil
+
+# Générateur d'anomalies de Student par paquets
+def anomalies_stud(n=1, mult_var=5, mult_moy=1,seuil=0.99):
+    seuil = seuil_student(seuil,mult_var,mult_moy)
+    
+    anomalies = []
+    while len(anomalies)<n:
+        valeurs = mult_student(5*n,mult_var,mult_moy)
+        khi2 = np.sum(np.multiply(valeurs,valeurs),axis=1)
+        indices = [i for i in range(5*n) if khi2[i]> seuil]
+        new_anomalies = np.array(valeurs)[indices]
+        anomalies.extend(new_anomalies)
+    
+    anomalies = np.array(anomalies[:n])
+
+    return anomalies
+
+
+anomalies = anomalies_stud(1000,.05,1,seuil=.99)
+print(np.mean(anomalies,axis=0))
+_,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
+
+
+
 # Test inversion matrice Cov
 var = np.cov(np.transpose(X_train))
 test = np.random.multivariate_normal(np.zeros(X_size),var,10000)
@@ -441,16 +526,3 @@ np.cov(np.transpose(test))
 test2 = np.dot(test,svar.T)
 np.cov(np.transpose(test2))
 
-# Student 
-NU_COPULA = 5
-N_SIM = 100
-var = np.cov(np.transpose(X_train))
-from scipy.stats import multivariate_normal, chi2, t
-
-gauss_rv = multivariate_normal(cov=var).rvs(N_SIM).transpose()
-chi2_rv = chi2(NU_COPULA).rvs(N_SIM)
-
-mult_factor = np.sqrt(NU_COPULA / chi2_rv)
-
-student_rvs = np.multiply(mult_factor, gauss_rv)
-inv_student_rvs = t.cdf(student_rvs, NU_COPULA).T

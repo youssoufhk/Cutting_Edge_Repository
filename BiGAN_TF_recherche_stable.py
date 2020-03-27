@@ -137,7 +137,6 @@ def KDE(X,Y):
 
 
 def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=False,fixed=False):
-    np.random.seed(7)
     scores = []
     X_batch = X_train
     for nb_neur in neurones:
@@ -145,6 +144,7 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=Fals
         tf.reset_default_graph()
         if fixed:
             tf.set_random_seed(1234)
+            np.random.seed(7)
         X = tf.placeholder(tf.float32,[None,X_size])
         Z = tf.placeholder(tf.float32,[None,X_size])
         

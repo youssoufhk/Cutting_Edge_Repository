@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+    Created on Mon Mar  9 17:20:16 2020
+    
+    @author: Yousshk
+    """
+
 
 import numpy as np
 import pandas as pd
@@ -40,7 +46,7 @@ X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False,random
 #Constants declaration
 Y_size = X_train.shape[0]     #the number of date we will used for one network training
 X_size = X_train.shape[1]     #X_size is the number of stock
-epochs = 2000
+epochs = 5000
 #the number of iteration
 
 ##############################################
@@ -134,9 +140,10 @@ def KDE(X,Y):
     score = -sum(kde.score_samples(Y))
     return score
 
+tf.set_random_seed(1234)
+np.random.seed(7)
 
-
-def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=False,fixed=False):
+def score(neurones,epoques=2000,ng=1,nd=2,lr=0.001,verbose=False,show_train=False,fixed=False):
     scores = []
     X_batch = X_train
     for nb_neur in neurones:
@@ -179,8 +186,6 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=Fals
         
         sess = tf.Session()
         sess.run(tf.global_variables_initializer())
-        nd_steps=1#entrainer plus de dis que gen
-        ng_steps=1
         d_loss_list=[]
         g_loss_list = []
         
@@ -189,10 +194,10 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=Fals
             for i in range(epoques):
                 Z_batch = sample_noise_Gaus(Y_size,X_size)
                 #ind_X = random.sample(range(Y_size),Y_size)
-                for _ in range(nd_steps):
+                for _ in range(nd):
                     _, dloss = sess.run([disc_step, disc_loss], feed_dict={X: X_batch, Z: Z_batch})
                 
-                for _ in range(ng_steps):
+                for _ in range(ng):
                     _, gloss = sess.run([gen_step, gen_loss],  feed_dict={X: X_batch, Z: Z_batch})
                 
                 if i%100==0:
@@ -200,14 +205,7 @@ def score(neurones,epoques=2000,ng=1,nd=1,lr=0.001,verbose=False,show_train=Fals
                     g_loss_list.append(gloss)
                     if show_train:
                         print ("Iterations:" ,i,"Discriminator loss: ",dloss,"Generator loss:" , gloss)
-        score = 0
-        """
-            for _ in range(1000):
-            Z_test = sample_noise_Gaus(np.shape(X_test)[0],X_size)
-            pred_test=sess.run(gen_sample,feed_dict={Z: Z_test})
-            score = score + KDE(pred_test,X_test)
-            score = score/1000
-            """
+
         Z_test = sample_noise_Gaus(np.shape(X_test)[0],X_size)
         pred_test=sess.run(gen_sample,feed_dict={Z: Z_test})
         score = KDE(pred_test,X_test)
@@ -256,9 +254,9 @@ modeles = [[10],[10,10],[10,10,10],[10,10,10,10],[10,10,10,10,10],
            [30],[30,30],[30,30,30],[30,30,30,30],[30,30,30,30,30],
            [40],[40,40],[40,40,40],[40,40,40,40],[40,40,40,40,40],
            [50],[50,50],[50,50,50],[50,50,50,50],[50,50,50,50,50],[64],[64,32]]
-
-scores = score([[10]],epoques=2000,ng=1,nd=1,lr=0.001,verbose=True,show_train=False,fixed=True)
-pd.DataFrame(scores).to_csv('scores2.csv',index = False)
+# fixed : entrainement sensible aux données utilisées/à la graine
+scores = score(modeles[0:2],epoques=20,ng=1,nd=1,lr=0.001,verbose=False,show_train=False,fixed=True)
+#pd.DataFrame(scores).to_csv('scores.csv',index = False)
 
 
 #Check if generator cheated discriminator by checking if Prob_real and

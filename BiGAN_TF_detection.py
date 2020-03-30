@@ -13,12 +13,14 @@ tf.disable_v2_behavior()
 import os
 from sklearn import preprocessing
 from copy import deepcopy
- 
- 
+
+
 tf.set_random_seed(2020)
 np.random.seed(7)
+
 default_path = "D:/Documents/Cours/Cutting Edge/"
 os.chdir(default_path)
+
 
 #Reset all the graph
 tf.reset_default_graph()
@@ -47,13 +49,49 @@ X_data =  Data*100 # 1/np.std(Data)
 #Split the raw data to two part train and test
 
 
-X_train, X_test = train_test_split(X_data, test_size = 0.35,shuffle=False)
+X_train, X_test = train_test_split(X_data, test_size = 0.3,shuffle=False)
 #X_train, X_test = train_test_split(X_data, test_size = 0.35,random_state=42)
 #Constants declaration
 Y_size = X_train.shape[0]     #the number of date we will used for one network training
 X_size = X_train.shape[1]     #X_size is the number of stock
 epochs = 2000
 #the number of iteration
+
+
+###################################
+############  STUDENT  ############
+###################################
+def generation_student(n_sim=1005,X_train_g=X_train):
+    # Student
+    NU_COPULA = 2
+    N_SIM = n_sim
+    var = np.cov(np.transpose(X_train_g))
+    
+    gauss_rv = multivariate_normal(cov=var).rvs(N_SIM).transpose()
+    chi2_rv = chi2(NU_COPULA).rvs(N_SIM)
+    
+    mult_factor = np.sqrt(NU_COPULA/chi2_rv)
+    
+    student_rvs = np.multiply(mult_factor, gauss_rv)
+    ## student_rvs = vector R
+    
+    inv_student_rvs = t.cdf(student_rvs, NU_COPULA).T
+    
+    T = []
+    for i in range(N_SIM):
+        T.append(t.ppf(inv_student_rvs[i,:],NU_COPULA))
+    
+    
+    X_data = np.array(T)
+    X_data
+    #Split the raw data to two part train and test
+    X_train, X_test = train_test_split(X_data, test_size = 0.3,shuffle=False)
+    return X_train,X_test
+
+X_train, X_test = generation_student(10000,X_train)
+
+Y_size = X_train.shape[0]     #the number of date we will used for one network training
+X_size = X_train.shape[1]     #X_size is the number of stock
 
 ##############################################
 ##############################################
@@ -73,7 +111,7 @@ def sample_noise_multiGaus(n=Y_size):
     return np.random.multivariate_normal(mean,var,n)
 
 
-def generator(Z,nb_neurone=[64,32],reuse=False):
+def generator(Z,nb_neurone=[64,32,16],reuse=False):
     """ generator structure
         Args:
         Z: The noise that is uniform or Gaussain
@@ -82,12 +120,11 @@ def generator(Z,nb_neurone=[64,32],reuse=False):
         """
     with tf.variable_scope("GAN/Generator",reuse=reuse):
         h1 = tf.layers.dense(Z,nb_neurone[0],activation=tf.nn.leaky_relu)
-        h2 = tf.layers.dense(h1,nb_neurone[1],activation=tf.nn.leaky_relu)
-        output = tf.layers.dense(h2,X_size)
+        output = tf.layers.dense(h1,X_size)
     return output
 
 
-def discriminator(X,Z,nb_neurone=[64,32],reuse=False):
+def discriminator(X,Z,nb_neurone=[128,64,32],reuse=False):
     """ discriminator structure
         Args:
         Z:
@@ -99,12 +136,12 @@ def discriminator(X,Z,nb_neurone=[64,32],reuse=False):
     with tf.variable_scope("GAN/Discriminator",reuse=reuse):
         h1 = tf.layers.dense(input,nb_neurone[0],activation=tf.nn.leaky_relu)
         h2 = tf.layers.dense(h1,nb_neurone[1],activation=tf.nn.leaky_relu)
-        h3 = tf.layers.dense(h2,2)
+        h3 = tf.layers.dense(h2,nb_neurone[2])
         output = tf.layers.dense(h3,1,activation=tf.nn.sigmoid)
     return output
 
 
-def encoder(X,nb_neurone=[64,32],reuse=False):
+def encoder(X,nb_neurone=[64,32,16],reuse=False):
     """ encoder structure
         Args:
         X: The real data
@@ -113,9 +150,9 @@ def encoder(X,nb_neurone=[64,32],reuse=False):
         """
     with tf.variable_scope("GAN/Encoder",reuse=reuse):
         h1 = tf.layers.dense(X,nb_neurone[0],activation=tf.nn.leaky_relu)
-        #h2 = tf.layers.dense(h1,32,activation=tf.nn.leaky_relu)
         output = tf.layers.dense(h1,X_size)
     return output
+
 
 
 
@@ -153,7 +190,7 @@ disc_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(disc_loss,va
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
-nd_steps=1#entrainer plus de dis que gen
+nd_steps=2#entrainer plus de dis que gen
 ng_steps=1
 d_loss_list=[]
 g_loss_list = []
@@ -320,7 +357,7 @@ def detection_simple(valeurs, seuil=0.99, verbose=False):
     nb_anomalies = len(quantile[indices])
     if verbose:
         print("Nombre de quantiles > ",seuil,":",nb_anomalies,"(%.2f%%)"%(100*nb_anomalies/n))
-
+    
     anomalies =[np.array(valeurs)[indices],np.array(quantile)[indices]]
     return anomalies, nb_anomalies
 
@@ -340,7 +377,7 @@ def detection(valeurs, seuil=0.99, verbose=False):
     nb_anomalies = len(quantile[indices])
     if verbose:
         print("Nombre de quantiles > ",seuil,":",nb_anomalies,"(%.2f%%)"%(100*nb_anomalies/n))
-
+    
     anomalies =[np.array(valeurs)[indices],np.array(quantile)[indices]]
     return anomalies, nb_anomalies
 
@@ -356,9 +393,9 @@ def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verb
     _,nb_mod = detection(valeur_mod, seuil, verbose)
     detecte = 0
     if nb_ini==0 and nb_mod == 1:
-            detecte = 1
+        detecte = 1
     
-    if show_res:    
+    if show_res:
         if nb_ini==1:
             print("La valeur initiale a été détectée comme une anomalie.")
             if nb_mod==1:
@@ -369,31 +406,100 @@ def test_detection(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verb
             print("La valeur modifiée a été détectée comme une anomalie.")
         if nb_ini==0 and nb_mod == 0:
             print("La valeur modifiée n'a pas été détectée comme une anomalie.")
-        
-    return detecte
+
+return detecte
 
 
 _ = test_detection(2,show_res=True)
 
+# Test de détection simple d'anomalie sur une observation modifiée de X_test
+def test_detection_simple(valeur, ligne=0,colonne=0, seuil=0.99, show_res = False, verbose=False):
+    valeur_ini=[X_test[ligne,:]]
+    valeur_mod = deepcopy(valeur_ini)
+    valeur_mod[0][colonne] = valeur
+    seuil = 0.99
+    _,nb_ini = detection_simple(valeur_ini, seuil, verbose)
+    _,nb_mod = detection_simple(valeur_mod, seuil, verbose)
+    detecte = 0
+    if nb_ini==0 and nb_mod == 1:
+        detecte = 1
+    
+    if show_res:
+        if nb_ini==1:
+            print("La valeur initiale a été détectée comme une anomalie.")
+            if nb_mod==1:
+                print("La valeur modifiée a aussi été détectée comme une anomalie.")
+            if nb_mod==0:
+                print("La valeur modifiée n'est plus détectée comme une anomalie.")
+        if nb_ini==0 and nb_mod == 1:
+            print("La valeur modifiée a été détectée comme une anomalie.")
+        if nb_ini==0 and nb_mod == 0:
+            print("La valeur modifiée n'a pas été détectée comme une anomalie.")
+
+return detecte
+
 # Test du seuil de détection d'anomalie par colonne sur les observations de X_test
-def recherche_seuil(colonne=0, ligne=0, seuil=0.99, nb_pas=50, val_max=5):
+def recherche_seuil(colonne=0, ligne=0, seuil=0.99, nb_pas=20, val_max=10,verbose=False):
     val_test = np.linspace(0,val_max,nb_pas)
     detecte = 0
     nb=0
-
+    
     while (detecte !=1 and nb<nb_pas):
         val = val_test[nb]
         detecte = test_detection(val, ligne=ligne, colonne=colonne,seuil=seuil)
         nb+=1
-    if detecte==1:
-        print("détection d'anomalie pour la valeur ",nb,": %.2f,"%val,"quantile %.2f%%"%(100*norm.cdf(val)))
-    else:
-        print("Aucune valeur seuil détectée <",val_max,"pour la colonne",colonne)
+    if verbose==True:
+        if detecte==1:
+            print("détection d'anomalie pour la valeur ",nb,"iem : %.2f,"%val,"quantile %.2f%%"%(100*norm.cdf(val)))
+        else:
+            print("Aucune valeur seuil détectée <",val_max,"pour la colonne",colonne)
     return val
+
+# Test du seuil de détection simple d'anomalie par colonne sur les observations de X_test
+def recherche_seuil_simple(colonne=0, ligne=0, seuil=0.99, nb_pas=20, val_max=10,verbose=False):
+    val_test = np.linspace(0,val_max,nb_pas)
+    detecte = 0
+    nb=0
     
-for col in range(n_stocks):
-    recherche_seuil(col, seuil=0.99, nb_pas=50, val_max=10)
+    while (detecte !=1 and nb<nb_pas):
+        val = val_test[nb]
+        detecte = test_detection_simple(val, ligne=ligne, colonne=colonne,seuil=seuil)
+        nb+=1
+    if verbose==True:
+        if detecte==1:
+            print("détection d'anomalie pour la valeur ",nb,"iem : %.2f,"%val,"quantile %.2f%%"%(100*norm.cdf(val)))
+        else:
+            print("Aucune valeur seuil détectée <",val_max,"pour la colonne",colonne)
+    return val
+
+
+# Affichage de la détection d'anomalies de col par col
+def plot_anomalies_col(x,y,title):
+    plt.figure(figsize=(8, 6))
+    plt.plot(x, 'ro-',label="BIGAN")
+    plt.plot(y, 'yo-',label="Simple Method")
+    plt.legend(loc='upper right')
+    plt.ylabel('anomalies détectées')
+    plt.xlabel('Index of Stock')
+    plt.title(title)
+    plt.grid()
+    plt.show()
+
+"""
+    val=[]
+    val_simple=[]
+    for col in range(n_stocks):
+    seuil=0
+    seuil_simple=0
+    for line in range(np.shape(X_test)[0]):
+    seuil = seuil+recherche_seuil(col,line,seuil=0.99, nb_pas=50, val_max=20)
+    seuil_simple = seuil_simple+recherche_seuil_simple(col,line,seuil=0.99, nb_pas=50, val_max=20)
+    val.append(seuil/np.shape(X_test)[0])
+    val_simple.append(seuil_simple/np.shape(X_test)[0])
     
+    plot_anomalies_col( val,val_simple,"Historique")
+    """
+
 # Générateur d'anomalie ligne à ligne
 def anomalies(n=1, multiplicateur=5, seuil=0.99):
     var = multiplicateur*np.cov(np.transpose(X_train))
@@ -420,8 +526,8 @@ _,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
 def anomalies_mult(n=1, mult_var=5, mult_moy=1,seuil=0.99):
     var = mult_var*np.cov(np.transpose(X_train))
     mean = mult_moy*np.mean(X_train,axis=0)
-    svar = np.linalg.cholesky(var)   
-        
+    svar = np.linalg.cholesky(var)
+    
     anomalies = []
     while len(anomalies)<n:
         valeurs = np.random.multivariate_normal(np.zeros(X_size),np.eye(X_size),5*n)
@@ -435,22 +541,87 @@ def anomalies_mult(n=1, mult_var=5, mult_moy=1,seuil=0.99):
     anomalies = np.dot(anomalies,svar.T)+mean
     return anomalies
 
-    
-anomalies = anomalies_mult(1000,20,1,seuil=.99)
-print(np.mean(anomalies,axis=0))
-_,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
-  
 
-test_ano = anomalies_mult(1000,1)
-_,_=detection(valeurs=test_ano,seuil=0.99,verbose=True)
-_,_=detection_simple(valeurs=test_ano,seuil=0.99,verbose=True)
+
+
+##############################################
+#Indicator Statistique#
+#Performance table
+##############################################
+
+def preformance_table_Bigan():
+    n=np.shape(X_test)[0]
+    accuracy=[]
+    precision=[]
+    recall=[]
+    f_score=[]
+    for val in np.linspace(.1,3,25):
+        anomalies = anomalies_mult(n,mult_var=val,mult_moy=1,seuil=.99)
+        _,TN=detection(valeurs=anomalies,seuil=0.99)
+        FP = n-TN
+        _,FN=detection(valeurs=X_test,seuil=0.99)
+        TP= n-FN
+        acc=(TP+TN)/(TP+FP+FN+TN)
+        accuracy.append(acc)
+        pre = TP/(TP+FP)
+        precision.append(pre)
+        rec = TP/(TP+FN)
+        recall.append(rec)
+        f_score.append(2*(rec*pre)/
+                       (rec+pre))
+    plt.figure()
+    plt.plot(np.linspace(.1,3,25),accuracy,'ro-',label="accuracy")
+
+plt.plot(np.linspace(.1,3,25),precision,'yo-',label="precision")
+    
+    plt.plot(np.linspace(.1,3,25),recall,'go-',label="recall")
+    
+    plt.plot(np.linspace(.1,3,25),f_score,'bo-',label="f_score")
+    plt.legend(loc='lower right')
+    plt.title("Performance table Historique-Bigan")
+
+def preformance_table_Simple():
+    n=np.shape(X_test)[0]
+    accuracy=[]
+    precision=[]
+    recall=[]
+    f_score=[]
+    for val in np.linspace(.1,5,25):
+        anomalies = anomalies_mult(n,mult_var=val,mult_moy=1,seuil=.99)
+        _,TN=detection_simple(valeurs=anomalies,seuil=0.99)
+        FP = n-TN
+        _,FN=detection_simple(valeurs=X_test,seuil=0.99)
+        TP= n-FN
+        acc=(TP+TN)/(TP+FP+FN+TN)
+        accuracy.append(acc)
+        pre = TP/(TP+FP)
+        precision.append(pre)
+        rec = TP/(TP+FN)
+        recall.append(rec)
+        f_score.append(2*(rec*pre)/
+                       (rec+pre))
+    plt.figure()
+    plt.plot(np.linspace(.1,3,25),accuracy,'ro-',label="accuracy")
+    plt.plot(np.linspace(.1,3,25),precision,'yo-',label="precision")
+    plt.plot(np.linspace(.1,3,25),recall,'go-',label="recall")
+    plt.plot(np.linspace(.1,3,25),f_score,'bo-',label="f_score")
+    plt.legend(loc='lower right')
+    plt.title("Performance table Historique-Simple")
+
+#preformance_table_Bigan()
+#preformance_table_Simple()
+#################
+#################
+
+
 
 # Affichage de la détection d'anomalies
 def plot_anomalies(x,y,title='',vol=True):
-    plt.plot(x[0],x[1], 'ro-')
-    plt.plot(y[0],y[1], 'yo-')
+    plt.plot(x[0],x[1], 'ro-',label="BIGAN")
+    plt.plot(y[0],y[1], 'yo-',label="Simple Method")
     plt.ylabel('% anomalies détectées')
     plt.ylabel('% anomalies détectées')
+    plt.legend(loc='lower right')
     plt.title(title)
     if vol:
         plt.xlabel('Multiplicateur de la vol')
@@ -458,8 +629,8 @@ def plot_anomalies(x,y,title='',vol=True):
         plt.xlabel('Multiplicateur de la moyenne')
     plt.grid()
     plt.show()
-    
-    
+
+
 # Détection des anomalies multivariées générées
 def test_anomalies_mult(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
     anomalies = anomalies_mult(n,mult_var,mult_moy,seuil)
@@ -476,13 +647,13 @@ for mult in np.linspace(.1,2.5,20):
     pct_anomalies_v.append([mult,pct])
 pct_anomalies_v=pd.DataFrame(pct_anomalies_v)
 
-    
-    
-# Multiplication sur la moyenne    
-pct_anomalies_m = []   
+
+
+# Multiplication sur la moyenne
+pct_anomalies_m = []
 for mult in np.linspace(1,45,20):
     _,pct = test_anomalies_mult(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
-    pct_anomalies_m.append([mult,pct])    
+    pct_anomalies_m.append([mult,pct])
 pct_anomalies_m=pd.DataFrame(pct_anomalies_m)
 
 
@@ -507,11 +678,11 @@ for mult in np.linspace(.1,2.5,20):
     _,pct = test_anomalies_mult_simp(n=10000,mult_var=mult,seuil=0.99)
     pct_anomalies_v_s.append([mult,pct])
 pct_anomalies_v_s=pd.DataFrame(pct_anomalies_v_s)
-# Multiplication sur la moyenne    
-pct_anomalies_m_s = []   
+# Multiplication sur la moyenne
+pct_anomalies_m_s = []
 for mult in np.linspace(1,45,20):
     _,pct = test_anomalies_mult_simp(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
-    pct_anomalies_m_s.append([mult,pct])    
+    pct_anomalies_m_s.append([mult,pct])
 pct_anomalies_m_s=pd.DataFrame(pct_anomalies_m_s)
 
 plot_anomalies(pct_anomalies_v,pct_anomalies_v_s,"Anomalies Gaussiennes")
@@ -521,7 +692,7 @@ plot_anomalies(pct_anomalies_m,pct_anomalies_m_s,vol=False)
 def mult_student(nb=1,mult_var=1,mult_moy=1,verbose=False):
     var = mult_var*np.cov(np.transpose(X_train))
     mean = mult_moy*np.mean(X_train,axis=0)
-    NU_COPULA = X_size    
+    NU_COPULA = X_size
     
     gauss_rv = multivariate_normal(mean=mean,cov=var).rvs(nb).transpose()
     chi2_rv = chi2(NU_COPULA).rvs(nb)
@@ -550,7 +721,7 @@ def seuil_student(alpha=0.99,mult_var=1,mult_moy=1,rep=100,nb=100000):
         seuil += quant_hist(valeurs,.99,False)
     seuil=seuil/rep
 
-    return seuil
+return seuil
 
 # Générateur d'anomalies de Student par paquets
 def anomalies_stud(n=1, mult_var=5, mult_moy=1,seuil=0.99):
@@ -566,7 +737,7 @@ def anomalies_stud(n=1, mult_var=5, mult_moy=1,seuil=0.99):
     
     anomalies = np.array(anomalies[:n])
 
-    return anomalies
+return anomalies
 
 anomalies = anomalies_stud(1000,.05,1,seuil=.99)
 _,nb=detection(valeurs=anomalies,seuil=0.99,verbose=True)
@@ -581,21 +752,21 @@ def test_anomalies_stud(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
     if verbose:
         print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
     return anomalies,pct
-    
+
 # Multiplication sur la var
 pct_anomalies_stud_v = []
 for mult in np.linspace(.01,1,20):
     _,pct =  test_anomalies_stud(n=10000,mult_var=mult,seuil=0.99)
     pct_anomalies_stud_v.append([mult,pct])
 pct_anomalies_stud_v=pd.DataFrame(pct_anomalies_stud_v)
-# Multiplication sur la moyenne    
+# Multiplication sur la moyenne
 pct_anomalies_stud_m = []
 for mult in np.linspace(1,16,20):
     _,pct =  test_anomalies_stud(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)
     pct_anomalies_stud_m.append([mult,pct])
 pct_anomalies_stud_m=pd.DataFrame(pct_anomalies_stud_m)
-    
-    
+
+
 # Détection simple (benchmark) des anomalies de Student multivariées générées
 def test_anomalies_stud_simp(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=True):
     anomalies = anomalies_stud(n,mult_var,mult_moy,seuil)
@@ -604,14 +775,14 @@ def test_anomalies_stud_simp(n=1, mult_var=5, mult_moy=1, seuil=0.99,verbose=Tru
     if verbose:
         print("Seuil: ",seuil,"mult var: %.2f"%mult_var,"mult moy: %.2f"%mult_moy,"Nb quantiles >:",nb,"(%.2f%%)"%(pct))
     return anomalies,pct
-    
+
 # Multiplication sur la var
 pct_anomalies_stud_v_s = []
 for mult in np.linspace(.01,1,20):
     _,pct =  test_anomalies_stud_simp(n=10000,mult_var=mult,seuil=0.99)
     pct_anomalies_stud_v_s.append([mult,pct])
 pct_anomalies_stud_v_s=pd.DataFrame(pct_anomalies_stud_v_s)
-# Multiplication sur la moyenne    
+# Multiplication sur la moyenne
 pct_anomalies_stud_m_s = []
 for mult in np.linspace(1,16,20):
     _,pct =  test_anomalies_stud_simp(n=10000,mult_var=.1,mult_moy=mult,seuil=0.99)

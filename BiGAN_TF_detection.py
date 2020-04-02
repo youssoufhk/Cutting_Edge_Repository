@@ -167,13 +167,23 @@ def encoder(X,nb_neurone=[10],couches=1,reuse=False):
 X = tf.placeholder(tf.float32,[None,n_stock])
 Z = tf.placeholder(tf.float32,[None,n_stock])
 
-gen_sample = generator(Z)
-z_sample = encoder(X)
+## Define the model you want to use for the generator and the encoder
+nb_neur = [64]
+couches = len(nb_neur)
+
+## Define the model you want to use for the discriminator
+nb_neur_disc = [128,64,32]
+couches_disc = len(nb_neur_disc)
+
+## inputs of the dicriminator
+
+gen_sample = generator(Z,nb_neurone=nb_neur,couches=couches)
+z_sample = encoder(X,nb_neurone=nb_neur,couches=couches)
 
 # The discriminator receives the real data with the encoder's noise (X,E(X)) and the fake data with the random noise (G(Z),Z)
-real_output = discriminator(X, z_sample)
-fake_output = discriminator(gen_sample, Z,reuse=True)
 
+real_output = discriminator(X, z_sample,nb_neurone=nb_neur_disc,couches=couches_disc)
+fake_output = discriminator(gen_sample, Z,nb_neurone=nb_neur_disc,couches=couches_disc,reuse=True)
 
 #Discriminator loss
 disc_loss = -tf.reduce_mean(tf.log(real_output+1e-5) + tf.log(1.0-fake_output+1e-5))

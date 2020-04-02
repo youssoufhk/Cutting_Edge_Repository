@@ -1,5 +1,7 @@
 # Cutting_Edge_Repository
 
+M2IF 2020 
+
 The goal of our project is to detect anomalies using BiGAN.
 
 In order to find the best architecture of the networks, run the code #BiGAN_TF_Recherche_stable.py
